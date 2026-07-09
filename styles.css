@@ -1,0 +1,28 @@
+/* Widens the dashboard/history data table to fill the page instead of being squeezed into
+ * the theme's default centred, max-width content column - this plugin's tables can run to
+ * 18+ columns and benefit from all the horizontal space available, unlike normal admin pages.
+ * Scoped to this plugin's own pages only via the body "path-" class Moodle adds from the URL,
+ * so it can't affect any other page on the site. */
+body.path-local-courseaudit #region-main-box,
+body.path-local-courseaudit #region-main,
+body.path-local-courseaudit #page-content,
+body.path-local-courseaudit #page.drawers {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* Pie charts (Courses by programme level / by school / students vs teachers) get a fixed,
+ * modest height so Chart.js's own responsive resizing (responsive: true, maintainAspectRatio:
+ * false - see lib/amd/src/chart_output_chartjs.js) has a bounded box to fill within its Bootstrap
+ * column instead of growing wide enough that the row of three needs horizontal scrolling to see
+ * them all. Scoped to this plugin's own wrapper class, not core's generic .chart-area, so it
+ * can't affect any other chart rendered elsewhere on the site. */
+.local_courseaudit-piechart-wrapper .chart-area,
+.local_courseaudit-piechart-wrapper .chart-image {
+    position: relative;
+    width: 100%;
+    height: 240px;
+}
+.local_courseaudit-piechart-wrapper canvas {
+    max-width: 100%;
+}

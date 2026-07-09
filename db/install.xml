@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/courseaudit/db" VERSION="2026070100" COMMENT="XMLDB file for Moodle local/courseaudit"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="local_courseaudit_timetable" COMMENT="Raw rows imported from institutional timetable spreadsheets">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="term" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="institution" TYPE="char" LENGTH="255" NOTNULL="true" COMMENT="Source label, auto-derived from the uploaded filename when importing multiple files at once"/>
+        <FIELD NAME="sourceformat" TYPE="char" LENGTH="20" NOTNULL="true" COMMENT="Detected parser format identifier"/>
+        <FIELD NAME="programcode" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="programname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="unitcode" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="unitcodekey" TYPE="char" LENGTH="100" NOTNULL="true" COMMENT="Whitespace-stripped uppercase unitcode, used for matching against course shortnames"/>
+        <FIELD NAME="unitname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="lecturername" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="studentcount" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="modelabel" TYPE="char" LENGTH="100" NOTNULL="false" COMMENT="Room type from the timetable (Virtual/Physical/Lab/Studio/PG/Zoom/etc), used as the Mode of learning source"/>
+        <FIELD NAME="modeofstudy" TYPE="char" LENGTH="50" NOTNULL="false" COMMENT="FT/PT/WKD/DL etc as printed on the timetable, used for course-matching disambiguation"/>
+        <FIELD NAME="campus" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="sheetname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="rawrow" TYPE="text" NOTNULL="false" COMMENT="JSON snapshot of the original row for debugging"/>
+        <FIELD NAME="importbatchid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timeimported" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="importedby" TYPE="int" LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="unitcode" UNIQUE="false" FIELDS="unitcode"/>
+        <INDEX NAME="unitcodekeyterm" UNIQUE="false" FIELDS="unitcodekey, term"/>
+        <INDEX NAME="term" UNIQUE="false" FIELDS="term"/>
+        <INDEX NAME="programcode" UNIQUE="false" FIELDS="programcode"/>
+        <INDEX NAME="importbatchid" UNIQUE="false" FIELDS="importbatchid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_courseaudit_programmap" COMMENT="One-time human classification of each programme code seen in timetables">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="programcode" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="programname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="programlevel" TYPE="char" LENGTH="50" NOTNULL="false" COMMENT="Certificate/Diploma/Bachelors/Postgraduate Diploma/Masters/Phd/Professional. May be a heuristic best-guess until confirmed=1"/>
+        <FIELD NAME="confirmed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 once a human has reviewed/saved this classification via the admin screen"/>
+        <FIELD NAME="usermodified" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="programcode" UNIQUE="true" FIELDS="programcode"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_courseaudit_audit" COMMENT="One row per Moodle course holding the latest audit values shown on the dashboard">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="unitcode" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="unitname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="school" TYPE="char" LENGTH="255" NOTNULL="false" COMMENT="Institution/school label from the matched timetable offering (see local_courseaudit_timetable.institution)"/>
+        <FIELD NAME="programme" TYPE="char" LENGTH="255" NOTNULL="false" COMMENT="Programme name/code from the matched timetable offering (e.g. 'Bachelor of Commerce') - distinct from programlevel, which is the classified Certificate/Diploma/.../Professional level"/>
+        <FIELD NAME="numstudents" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="lecturername" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="timetablelecturer" TYPE="char" LENGTH="255" NOTNULL="false" COMMENT="Raw scheduled lecturer name(s) from the matched timetable offering, unmerged with any other source - used by the exported Lecturer Mismatch report"/>
+        <FIELD NAME="lmslecturer" TYPE="char" LENGTH="255" NOTNULL="false" COMMENT="Raw name(s) of user(s) actually enrolled as teacher in this Moodle course, unmerged with any other source - used by the exported Lecturer Mismatch report"/>
+        <FIELD NAME="hastimetablematch" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 if any timetable offering was found for this course's derived unit code at all (regardless of disambiguation), 0 if none - used by the exported Unit Mismatch report"/>
+        <FIELD NAME="programlevel" TYPE="char" LENGTH="50" NOTNULL="false"/>
+        <FIELD NAME="modeoflearning" TYPE="char" LENGTH="50" NOTNULL="false"/>
+        <FIELD NAME="templatedeployed" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="attendancelink" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="materialsweeks" TYPE="char" LENGTH="50" NOTNULL="false"/>
+        <FIELD NAME="numcatsquizzes" TYPE="char" LENGTH="20" NOTNULL="false" COMMENT="None/1/2/3/4/5/'more than 5', matching the Lists sheet dropdown"/>
+        <FIELD NAME="assign1feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="assign2feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="assign3feedback" TYPE="char" LENGTH="20" NOTNULL="false" COMMENT="Column N on the Data sheet - its header is a verbatim duplicate of L (Assign 1 Feedback), interpreted as a slot for a 3rd assignment"/>
+        <FIELD NAME="cat1feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="cat2feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="comments" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="datechecked" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="reviewed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="reviewedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="needsclassification" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="matchedterm" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="evidence" TYPE="text" NOTNULL="false" COMMENT="JSON blob of heuristic evidence for tooltips"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="courseid" UNIQUE="true" FIELDS="courseid"/>
+        <INDEX NAME="reviewed" UNIQUE="false" FIELDS="reviewed"/>
+        <INDEX NAME="school" UNIQUE="false" FIELDS="school"/>
+        <INDEX NAME="programlevel" UNIQUE="false" FIELDS="programlevel"/>
+        <INDEX NAME="hastimetablematch" UNIQUE="false" FIELDS="hastimetablematch"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_courseaudit_history" COMMENT="Snapshot of local_courseaudit_audit rows taken each time 'Clear all data' archives a finished audit cycle, so past cycles can still be viewed/compared after the live dashboard is reset for a new one">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cyclelabel" TYPE="char" LENGTH="255" NOTNULL="true" COMMENT="Human-entered label for this audit cycle (e.g. 'MAY-AUG-2026'), or an auto-generated date-based one if left blank"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="unitcode" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="unitname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="school" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="programme" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="numstudents" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="lecturername" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="programlevel" TYPE="char" LENGTH="50" NOTNULL="false"/>
+        <FIELD NAME="modeoflearning" TYPE="char" LENGTH="50" NOTNULL="false"/>
+        <FIELD NAME="templatedeployed" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="attendancelink" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="materialsweeks" TYPE="char" LENGTH="50" NOTNULL="false"/>
+        <FIELD NAME="numcatsquizzes" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="assign1feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="assign2feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="assign3feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="cat1feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="cat2feedback" TYPE="char" LENGTH="20" NOTNULL="false"/>
+        <FIELD NAME="comments" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="datechecked" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="reviewed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="reviewedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="matchedterm" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="archivedtime" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="archivedby" TYPE="int" LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cyclelabel" UNIQUE="false" FIELDS="cyclelabel"/>
+        <INDEX NAME="courseid" UNIQUE="false" FIELDS="courseid"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
