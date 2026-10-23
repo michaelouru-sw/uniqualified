@@ -50,6 +50,30 @@ they're facts, not a judgement call - see "Every import replaces the
 entire timetable table" under "The university's master timetable format"
 below for why.
 
+## Trends and KPI cards
+
+After every refresh (scheduled or from the dashboard button) the plugin saves one snapshot per
+day, course category and school into `local_courseaudit_trend` - how many audited courses meet each
+requirement. Running several refreshes in one day keeps the latest. On upgrade the table is seeded
+from every archived audit cycle plus the current state, so history starts immediately.
+
+The dashboard uses it for:
+
+- **KPI cards** - overall compliance, standard template, attendance link, materials posted,
+  feedback given and % reviewed, each coloured by status (green >= 80%, amber >= 50%, red below),
+  with the change in percentage points against the snapshot about a week earlier and a sparkline.
+  "Overall" is the plain average of template, attendance link, materials, CATs/quizzes posted and
+  feedback; "reviewed" is a workflow measure and is not part of it.
+- **Compliance over time** - one line per requirement group, viewable **by day or by week**
+  (a week shows its last snapshot) over the last 4/12/26 weeks or all time.
+- **Weekly activity** - courses added to the audit vs courses marked Reviewed each week
+  (Reviewed time is stored in `reviewedtime`; rows reviewed before the upgrade use their last
+  modified time).
+
+Trends follow the Category and School filters only (a daily snapshot can't be re-filtered by a
+search term afterwards). A category-scoped viewer only ever sees trends for their own categories.
+A line appears once there are two days of data.
+
 ## The course fullname convention
 
 Every real course on this LMS has a fullname built as six colon-delimited fields:

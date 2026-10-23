@@ -83,6 +83,7 @@
         <FIELD NAME="datechecked" TYPE="int" LENGTH="10" NOTNULL="false"/>
         <FIELD NAME="reviewed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="reviewedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="reviewedtime" TYPE="int" LENGTH="10" NOTNULL="false" COMMENT="When this row was last marked Reviewed - lets the dashboard chart review progress by week"/>
         <FIELD NAME="needsclassification" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="matchedterm" TYPE="char" LENGTH="100" NOTNULL="false"/>
         <FIELD NAME="evidence" TYPE="text" NOTNULL="false" COMMENT="JSON blob of heuristic evidence for tooltips"/>
@@ -136,6 +137,33 @@
       <INDEXES>
         <INDEX NAME="cyclelabel" UNIQUE="false" FIELDS="cyclelabel"/>
         <INDEX NAME="courseid" UNIQUE="false" FIELDS="courseid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_courseaudit_trend" COMMENT="One row per day, course category and school: how many audited courses met each requirement. Written after every refresh, so the dashboard can chart compliance trends by day or week">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapday" TYPE="int" LENGTH="8" NOTNULL="true" COMMENT="Calendar day as YYYYMMDD (server timezone)"/>
+        <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Moodle course category - kept so category-scoped viewers only ever see their own categories' trends"/>
+        <FIELD NAME="school" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" COMMENT="Empty string when the course has no school"/>
+        <FIELD NAME="courses" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="reviewed" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="templateyes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="attendanceyes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="materialsyes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="catsyes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="assign1yes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="assign2yes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="assign3yes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="cat1yes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="cat2yes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecaptured" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapday" UNIQUE="false" FIELDS="snapday"/>
+        <INDEX NAME="categoryid" UNIQUE="false" FIELDS="categoryid"/>
       </INDEXES>
     </TABLE>
   </TABLES>

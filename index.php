@@ -29,6 +29,8 @@ use local_courseaudit\program_mapper;
 use local_courseaudit\dashboard_charts;
 use local_courseaudit\dashboard_filters;
 use local_courseaudit\ml_insights;
+use local_courseaudit\trend_report;
+use local_courseaudit\trend_view;
 
 require_login();
 $systemcontext = context_system::instance();
@@ -52,6 +54,14 @@ const COURSEAUDIT_PERPAGE = 50;
 
 $action = optional_param('action', '', PARAM_ALPHA);
 $page = optional_param('page', 0, PARAM_INT);
+$trendgrain = optional_param('trendgrain', trend_report::GRAIN_WEEK, PARAM_ALPHA);
+if (!in_array($trendgrain, [trend_report::GRAIN_DAY, trend_report::GRAIN_WEEK], true)) {
+    $trendgrain = trend_report::GRAIN_WEEK;
+}
+$trendweeks = optional_param('trendweeks', 12, PARAM_INT);
+if (!in_array($trendweeks, [4, 12, 26, 0], true)) {
+    $trendweeks = 12;
+}
 
 $filters = dashboard_filters::from_request();
 $categoryid = $filters['categoryid'];
@@ -72,6 +82,8 @@ $pageurl = new moodle_url('/local/courseaudit/index.php', [
     'search' => $search,
     'mlcourserisk' => $mlcourserisk,
     'mlstudentrisk' => $mlstudentrisk,
+    'trendgrain' => $trendgrain,
+    'trendweeks' => $trendweeks,
 ]);
 $pageurlwithpage = new moodle_url($pageurl, ['page' => $page]);
 
@@ -107,10 +119,11 @@ if (in_array($bulkaction, ['review', 'unreview'], true) && $canmanage && confirm
         $updated = $DB->count_records_select('local_courseaudit_audit', "id $insql", $inparams);
         $DB->execute(
             "UPDATE {local_courseaudit_audit}
-                SET reviewed = :reviewed, reviewedby = :reviewedby, timemodified = :timemodified
+                SET reviewed = :reviewed, reviewedby = :reviewedby, reviewedtime = :reviewedtime,
+                    timemodified = :timemodified
               WHERE id $insql",
             array_merge(['reviewed' => $reviewedvalue, 'reviewedby' => $reviewedvalue ? $USER->id : null,
-                'timemodified' => time()], $inparams)
+                'reviewedtime' => $reviewedvalue ? time() : null, 'timemodified' => time()], $inparams)
         );
     }
     $langkey = $bulkaction === 'review' ? 'bulkreviewsuccess' : 'bulkunreviewsuccess';
@@ -320,6 +333,91 @@ if (!$mlavailable && $canmanage) {
     echo $OUTPUT->notification(get_string('mlnotavailable', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
 }
 
+// KPI cards and trend charts. These read the daily snapshots (see trend_snapshot), so they follow
+// the Category and School filters only - the other filters narrow the live table and charts, but
+// a snapshot can't be re-filtered by, say, a search term after the fact.
+$trendrows = trend_report::fetch_rows($hassystemview, $allowedcategoryids, (int) $categoryid, (string) $school,
+    trend_report::since_day($trendweeks, time()));
+$trenddaily = trend_report::daily_totals($trendrows);
+$trendbuckets = trend_report::bucket($trenddaily, $trendgrain);
+$kpis = trend_report::kpis($trenddaily);
+
+$trendlabels = [
+    'overall' => get_string('kpi_overall', 'local_courseaudit'),
+    'template' => get_string('kpi_template', 'local_courseaudit'),
+    'attendance' => get_string('kpi_attendance', 'local_courseaudit'),
+    'materials' => get_string('kpi_materials', 'local_courseaudit'),
+    'feedback' => get_string('kpi_feedback', 'local_courseaudit'),
+    'reviewed' => get_string('kpi_reviewed', 'local_courseaudit'),
+];
+$trendchart = dashboard_charts::trend_chart($trendbuckets, $trendlabels,
+    get_string('trend_chart_title', 'local_courseaudit'));
+
+$activitytimes = $DB->get_records_sql("SELECT a.id, a.timecreated, a.reviewed, a.reviewedtime $fromwheresql", $params);
+$addedtimes = [];
+$reviewedtimes = [];
+foreach ($activitytimes as $activityrow) {
+    $addedtimes[] = (int) $activityrow->timecreated;
+    if (!empty($activityrow->reviewed) && !empty($activityrow->reviewedtime)) {
+        $reviewedtimes[] = (int) $activityrow->reviewedtime;
+    }
+}
+$activitychart = dashboard_charts::activity_chart(
+    trend_report::weekly_activity($addedtimes, $reviewedtimes, $trendweeks, time(), \core_date::get_server_timezone_object()),
+    get_string('trend_added', 'local_courseaudit'),
+    get_string('trend_reviewed_count', 'local_courseaudit'),
+    get_string('trend_activity_title', 'local_courseaudit')
+);
+
+if ($kpis !== null) {
+    $compareday = $kpis['baselinegap'] ?? 7;
+    echo html_writer::tag('p',
+        get_string('trend_asof', 'local_courseaudit', userdate(
+            \DateTimeImmutable::createFromFormat('!Ymd', (string) $kpis['asof'], new \DateTimeZone('UTC'))->getTimestamp(),
+            get_string('strftimedatefullshort', 'core_langconfig'), 99, false)),
+        ['class' => 'text-muted small mb-1']);
+    echo trend_view::cards($kpis, $trendlabels, get_string('kpi_pts', 'local_courseaudit'),
+        get_string('kpi_vsprevious', 'local_courseaudit', $compareday));
+}
+
+echo html_writer::start_div('local_courseaudit-trends mb-3');
+echo html_writer::start_div('d-flex flex-wrap align-items-center mb-2 local_courseaudit-trend-controls');
+echo $OUTPUT->heading(get_string('trend_heading', 'local_courseaudit'), 4, 'mb-0 mr-3');
+echo html_writer::tag('span', get_string('trend_grain', 'local_courseaudit') . ':', ['class' => 'mr-1 text-muted small']);
+foreach ([trend_report::GRAIN_DAY => 'trend_grain_day', trend_report::GRAIN_WEEK => 'trend_grain_week'] as $grain => $stringkey) {
+    echo html_writer::link(new moodle_url($pageurl, ['trendgrain' => $grain]), get_string($stringkey, 'local_courseaudit'),
+        ['class' => 'btn btn-sm ' . ($grain === $trendgrain ? 'btn-primary' : 'btn-outline-secondary')]);
+}
+echo html_writer::tag('span', get_string('trend_range', 'local_courseaudit') . ':', ['class' => 'ml-3 mr-1 text-muted small']);
+foreach ([4, 12, 26, 0] as $weeks) {
+    $rangelabel = $weeks === 0 ? get_string('trend_range_all', 'local_courseaudit')
+        : get_string('trend_range_weeks', 'local_courseaudit', $weeks);
+    echo html_writer::link(new moodle_url($pageurl, ['trendweeks' => $weeks]), $rangelabel,
+        ['class' => 'btn btn-sm ' . ($weeks === $trendweeks ? 'btn-primary' : 'btn-outline-secondary')]);
+}
+echo html_writer::end_div();
+
+if ($trendchart) {
+    echo html_writer::start_div('row');
+    echo html_writer::start_div($activitychart ? 'col-lg-7 mb-3' : 'col-12 mb-3');
+    echo html_writer::start_div('local_courseaudit-trend-chart');
+    echo $OUTPUT->render_chart($trendchart, false);
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+    if ($activitychart) {
+        echo html_writer::start_div('col-lg-5 mb-3');
+        echo html_writer::start_div('local_courseaudit-trend-chart');
+        echo $OUTPUT->render_chart($activitychart, false);
+        echo html_writer::end_div();
+        echo html_writer::end_div();
+    }
+    echo html_writer::end_div();
+    echo html_writer::tag('p', get_string('trend_scope_note', 'local_courseaudit'), ['class' => 'text-muted small']);
+} else {
+    echo $OUTPUT->notification(get_string('trend_none', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
+}
+echo html_writer::end_div();
+
 // Charts - the bar chart and pies all reflect the filters below, so drilling down (e.g.
 // School = SOB) updates every chart, not just the table. Nothing to show yet until at least
 // one refresh has populated the audit table.
@@ -363,6 +461,9 @@ if ($compliancechart || $piecharts) {
 
 // Filter form.
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $pageurl->out_omit_querystring(), 'class' => 'form-inline mb-2']);
+// Keep the chosen trend view when filters are applied.
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendgrain', 'value' => $trendgrain]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendweeks', 'value' => $trendweeks]);
 
 echo html_writer::tag('label', get_string('filtersearch', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_search']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'name' => 'search', 'id' => 'id_search', 'value' => s($search),

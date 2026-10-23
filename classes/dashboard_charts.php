@@ -348,4 +348,80 @@ class dashboard_charts {
 
         return $chart;
     }
+
+    /** @var string[] Line colours for the trend chart, by metric - chosen to stay distinguishable (and colour-blind friendly) rather than brand-only, since six lines need more than two hues. */
+    const TREND_COLORS = [
+        'overall' => '#192C57',
+        'template' => '#CBAE2D',
+        'attendance' => '#2A9D8F',
+        'materials' => '#C8553D',
+        'feedback' => '#7B5EA7',
+        'reviewed' => '#9AA5B8',
+    ];
+
+    /**
+     * Compliance over time: one line per requirement group, plus overall and % reviewed.
+     *
+     * @param array[] $buckets As returned by trend_report::bucket().
+     * @param string[] $serieslabels Translated series name per metric key (also decides which lines are drawn).
+     * @param string $title
+     * @return \core\chart_line|null Null with fewer than 2 points - a single dot isn't a trend.
+     */
+    public static function trend_chart(array $buckets, array $serieslabels, string $title): ?\core\chart_line {
+        if (count($buckets) < 2) {
+            return null;
+        }
+
+        $chart = new \core\chart_line();
+        $chart->set_title($title);
+        $chart->set_smooth(false);
+        $chart->set_labels(array_column($buckets, 'label'));
+
+        foreach ($serieslabels as $key => $label) {
+            $values = [];
+            foreach ($buckets as $bucket) {
+                $values[] = $bucket['pct'][$key];
+            }
+            $series = new \core\chart_series($label, $values);
+            $series->set_color(self::TREND_COLORS[$key] ?? self::BRAND_NEUTRAL);
+            $series->set_smooth(false);
+            $chart->add_series($series);
+        }
+
+        $yaxis = $chart->get_yaxis(0, true);
+        $yaxis->set_min(0);
+        $yaxis->set_max(100);
+        $yaxis->set_label('%');
+
+        return $chart;
+    }
+
+    /**
+     * Courses added to the audit vs. courses marked Reviewed, per week.
+     *
+     * @param array $activity As returned by trend_report::weekly_activity().
+     * @param string $addedlabel
+     * @param string $reviewedlabel
+     * @param string $title
+     * @return \core\chart_bar|null Null when nothing happened in the period.
+     */
+    public static function activity_chart(array $activity, string $addedlabel, string $reviewedlabel,
+            string $title): ?\core\chart_bar {
+        if (array_sum($activity['added']) + array_sum($activity['reviewed']) === 0) {
+            return null;
+        }
+
+        $chart = new \core\chart_bar();
+        $chart->set_title($title);
+        $chart->set_labels($activity['labels']);
+
+        $added = new \core\chart_series($addedlabel, $activity['added']);
+        $added->set_color(self::BRAND_BLUE);
+        $reviewed = new \core\chart_series($reviewedlabel, $activity['reviewed']);
+        $reviewed->set_color(self::BRAND_GOLD);
+        $chart->add_series($added);
+        $chart->add_series($reviewed);
+
+        return $chart;
+    }
 }

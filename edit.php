@@ -86,6 +86,8 @@ if ($data = $form->get_data()) {
     $update->datechecked = !empty($data->datechecked) ? $data->datechecked : null;
     $update->reviewed = !empty($data->reviewed) ? 1 : 0;
     $update->reviewedby = !empty($data->reviewed) ? $USER->id : null;
+    // Only stamp a new time when it's newly marked; keep the original date if it was already reviewed.
+    $update->reviewedtime = !empty($data->reviewed) ? ($record->reviewedtime ?: time()) : null;
     $update->timemodified = time();
 
     $DB->update_record('local_courseaudit_audit', $update);

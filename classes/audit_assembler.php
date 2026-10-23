@@ -138,6 +138,14 @@ class audit_assembler {
         set_config('lastrefreshcounts', json_encode($counts), 'local_courseaudit');
         set_config('lastrefreshfailures', json_encode($failures), 'local_courseaudit');
 
+        // One trend point per day (re-running on the same day replaces it) so the dashboard can
+        // chart compliance over time. Best-effort: a failure here must never fail the refresh.
+        try {
+            trend_snapshot::capture();
+        } catch (\Throwable $e) {
+            debugging('local_courseaudit: trend snapshot failed: ' . $e->getMessage(), DEBUG_NORMAL);
+        }
+
         $counts['failures'] = $failures;
         return $counts;
     }

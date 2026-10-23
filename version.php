@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_courseaudit';
-$plugin->version   = 2026102300;
+$plugin->version   = 2026102400;
 $plugin->requires  = 2024100700; // Moodle 5.0+.
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.11.2';
+$plugin->release   = '0.12.0';

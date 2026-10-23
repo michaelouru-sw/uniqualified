@@ -183,3 +183,27 @@ By school:
 Review them here: {$a->url}';
 
 $string['privacy:metadata'] = 'The Uniqualified plugin stores lecturer names copied from institutional timetables and Moodle course data, and the name of the staff member who reviewed each course, purely for internal quality-assurance reporting.';
+
+// Trends and KPI cards.
+$string['trend_heading'] = 'Trends';
+$string['trend_chart_title'] = 'Compliance over time (% of audited courses)';
+$string['trend_activity_title'] = 'Weekly activity';
+$string['trend_added'] = 'Courses added to audit';
+$string['trend_reviewed_count'] = 'Courses reviewed';
+$string['trend_grain'] = 'View by';
+$string['trend_grain_day'] = 'Day';
+$string['trend_grain_week'] = 'Week';
+$string['trend_range'] = 'Period';
+$string['trend_range_weeks'] = 'Last {$a} weeks';
+$string['trend_range_all'] = 'All time';
+$string['trend_none'] = 'Trends start building after the next refresh: one point is saved per day, so a line appears once there are two days of data.';
+$string['trend_scope_note'] = 'Trends follow the Category and School filters only, and show the state as of each day\'s last refresh.';
+$string['trend_asof'] = 'As of {$a}';
+$string['kpi_overall'] = 'Overall compliance';
+$string['kpi_template'] = 'Standard template';
+$string['kpi_attendance'] = 'Attendance link';
+$string['kpi_materials'] = 'Materials posted';
+$string['kpi_feedback'] = 'Feedback given';
+$string['kpi_reviewed'] = 'Reviewed';
+$string['kpi_pts'] = 'pts';
+$string['kpi_vsprevious'] = 'vs {$a} days ago';

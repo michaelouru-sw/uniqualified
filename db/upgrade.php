@@ -178,5 +178,38 @@ function xmldb_local_courseaudit_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026071000, 'local', 'courseaudit');
     }
 
+    if ($oldversion < 2026102400) {
+        // Dashboard trends: when each row was marked Reviewed, plus a per-day snapshot table so
+        // compliance can be charted by day/week - see classes/trend_snapshot.php.
+        $table = new xmldb_table('local_courseaudit_audit');
+        $reviewedtimefield = new xmldb_field('reviewedtime', XMLDB_TYPE_INTEGER, '10', null, false, false, null, 'reviewedby');
+        if (!$dbman->field_exists($table, $reviewedtimefield)) {
+            $dbman->add_field($table, $reviewedtimefield);
+        }
+        // Best available approximation for rows already reviewed before this field existed.
+        $DB->execute('UPDATE {local_courseaudit_audit} SET reviewedtime = timemodified WHERE reviewed = 1 AND reviewedtime IS NULL');
+
+        $trendtable = new xmldb_table('local_courseaudit_trend');
+        if (!$dbman->table_exists($trendtable)) {
+            $trendtable->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $trendtable->add_field('snapday', XMLDB_TYPE_INTEGER, '8', null, XMLDB_NOTNULL);
+            $trendtable->add_field('categoryid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $trendtable->add_field('school', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
+            foreach (['courses', 'reviewed', 'templateyes', 'attendanceyes', 'materialsyes', 'catsyes',
+                    'assign1yes', 'assign2yes', 'assign3yes', 'cat1yes', 'cat2yes', 'timecaptured'] as $name) {
+                $trendtable->add_field($name, XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            }
+            $trendtable->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $trendtable->add_index('snapday', XMLDB_INDEX_NOTUNIQUE, ['snapday']);
+            $trendtable->add_index('categoryid', XMLDB_INDEX_NOTUNIQUE, ['categoryid']);
+            $dbman->create_table($trendtable);
+        }
+
+        // Seed the trend with what's already known: every archived cycle, plus today's live state.
+        \local_courseaudit\trend_snapshot::backfill();
+
+        upgrade_plugin_savepoint(true, 2026102400, 'local', 'courseaudit');
+    }
+
     return true;
 }
