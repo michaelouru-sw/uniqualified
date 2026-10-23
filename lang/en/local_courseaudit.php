@@ -207,3 +207,16 @@ $string['kpi_feedback'] = 'Feedback given';
 $string['kpi_reviewed'] = 'Reviewed';
 $string['kpi_pts'] = 'pts';
 $string['kpi_vsprevious'] = 'vs {$a} days ago';
+
+// Needs attention.
+$string['attention_schools_title'] = 'Schools needing attention (lowest overall compliance)';
+$string['attention_drops_title'] = 'Slipping fastest this week';
+$string['attention_lecturers_title'] = 'Lecturers with the most gaps';
+$string['attention_lecturers_note'] = 'Average compliance of each lecturer\'s courses under the current filters. Click a name to see their courses.';
+$string['attention_col_school'] = 'School';
+$string['attention_col_courses'] = 'Courses';
+$string['attention_col_overall'] = 'Overall';
+$string['attention_col_change'] = 'Change';
+$string['attention_col_lecturer'] = 'Lecturer';
+$string['attention_col_average'] = 'Average';
+$string['attention_col_unreviewed'] = 'Unreviewed';

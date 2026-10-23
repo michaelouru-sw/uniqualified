@@ -74,6 +74,24 @@ Trends follow the Category and School filters only (a daily snapshot can't be re
 search term afterwards). A category-scoped viewer only ever sees trends for their own categories.
 A line appears once there are two days of data.
 
+## Needs attention
+
+Under the trend charts, two lists say who to chase first:
+
+- **Schools needing attention** - the five lowest on overall compliance, each with its change in
+  points against about a week earlier, plus a "slipping fastest" line for schools down 2+ points.
+  Hidden once a School filter is applied (there is then only one). Click a school to filter to it.
+- **Lecturers with the most gaps** - the five lecturers whose courses average the lowest overall
+  compliance under the current filters (a co-taught course counts for each lecturer named on it).
+  Click a name to list their courses.
+
+## Tests
+
+`tests/*_test.php` files that only need PHP (link detection, trend maths, rankings, HTML) run under
+any PHPUnit. `tests/heuristics_db_test.php` and `tests/trend_db_test.php` use the course generator
+and database, so they need Moodle's own PHPUnit setup (`php admin/tool/phpunit/cli/init.php`, then
+`vendor/bin/phpunit --testsuite local_courseaudit_testsuite`).
+
 ## The course fullname convention
 
 Every real course on this LMS has a fullname built as six colon-delimited fields:

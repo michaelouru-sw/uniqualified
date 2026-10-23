@@ -29,7 +29,9 @@ use local_courseaudit\program_mapper;
 use local_courseaudit\dashboard_charts;
 use local_courseaudit\dashboard_filters;
 use local_courseaudit\ml_insights;
+use local_courseaudit\attention_report;
 use local_courseaudit\trend_report;
+use local_courseaudit\trend_snapshot;
 use local_courseaudit\trend_view;
 
 require_login();
@@ -417,6 +419,90 @@ if ($trendchart) {
     echo $OUTPUT->notification(get_string('trend_none', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
 }
 echo html_writer::end_div();
+
+// "Needs attention": who to chase first. Schools use the snapshots (so they carry a week-on-week
+// change) and are hidden once a School filter is on, since there is then only one; lecturers use
+// the live rows under every active filter.
+$attentionschools = ['lowest' => [], 'drops' => []];
+if ($school === '') {
+    $attentionschools = attention_report::rank_schools(trend_report::fetch_rows(
+        $hassystemview, $allowedcategoryids, (int) $categoryid, '', trend_report::since_day(5, time())));
+}
+$attentionlecturers = attention_report::rank_lecturers($DB->get_records_sql(
+    'SELECT a.id, a.lecturername, ' . trend_snapshot::AUDIT_COLUMNS . " $fromwheresql", $params));
+
+$formatpts = static function (?float $delta): string {
+    $delta = \local_courseaudit\trend_view::delta($delta, get_string('kpi_pts', 'local_courseaudit'));
+    return $delta['text'] === '' ? '-' : html_writer::tag('span', s($delta['text']),
+        ['class' => 'local_courseaudit-delta-' . $delta['tone']]);
+};
+
+if ($attentionschools['lowest'] || $attentionlecturers) {
+    echo html_writer::start_div('row local_courseaudit-chartrow local_courseaudit-attention');
+
+    if ($attentionschools['lowest']) {
+        $schooltable = new html_table();
+        $schooltable->attributes['class'] = 'generaltable table-sm mb-2';
+        $schooltable->head = [
+            get_string('attention_col_school', 'local_courseaudit'),
+            get_string('attention_col_courses', 'local_courseaudit'),
+            get_string('attention_col_overall', 'local_courseaudit'),
+            get_string('attention_col_change', 'local_courseaudit'),
+        ];
+        foreach ($attentionschools['lowest'] as $entry) {
+            $schooltable->data[] = [
+                html_writer::link(new moodle_url($pageurl, ['school' => $entry['school'], 'page' => 0]), s($entry['school'])),
+                $entry['courses'],
+                html_writer::tag('span', $entry['overall'] . '%',
+                    ['class' => 'badge local_courseaudit-pill-' . trend_view::status($entry['overall'])]),
+                $formatpts($entry['delta']),
+            ];
+        }
+        echo html_writer::start_div('col-lg-6 mb-3');
+        echo html_writer::start_div('local_courseaudit-chartbox h-100');
+        echo $OUTPUT->heading(get_string('attention_schools_title', 'local_courseaudit'), 5);
+        echo html_writer::table($schooltable);
+        if ($attentionschools['drops']) {
+            $dropnames = array_map(static function (array $entry) use ($pageurl, $formatpts): string {
+                return html_writer::link(new moodle_url($pageurl, ['school' => $entry['school'], 'page' => 0]),
+                    s($entry['school'])) . ' ' . $formatpts($entry['delta']);
+            }, $attentionschools['drops']);
+            echo html_writer::tag('p', html_writer::tag('strong', get_string('attention_drops_title', 'local_courseaudit') . ': ')
+                . implode(' &middot; ', $dropnames), ['class' => 'small mb-0']);
+        }
+        echo html_writer::end_div();
+        echo html_writer::end_div();
+    }
+
+    if ($attentionlecturers) {
+        $lecturertable = new html_table();
+        $lecturertable->attributes['class'] = 'generaltable table-sm mb-2';
+        $lecturertable->head = [
+            get_string('attention_col_lecturer', 'local_courseaudit'),
+            get_string('attention_col_courses', 'local_courseaudit'),
+            get_string('attention_col_average', 'local_courseaudit'),
+            get_string('attention_col_unreviewed', 'local_courseaudit'),
+        ];
+        foreach ($attentionlecturers as $entry) {
+            $lecturertable->data[] = [
+                html_writer::link(new moodle_url($pageurl, ['search' => $entry['name'], 'page' => 0]), s($entry['name'])),
+                $entry['courses'],
+                html_writer::tag('span', $entry['average'] . '%',
+                    ['class' => 'badge local_courseaudit-pill-' . trend_view::status($entry['average'])]),
+                $entry['unreviewed'],
+            ];
+        }
+        echo html_writer::start_div($attentionschools['lowest'] ? 'col-lg-6 mb-3' : 'col-12 mb-3');
+        echo html_writer::start_div('local_courseaudit-chartbox h-100');
+        echo $OUTPUT->heading(get_string('attention_lecturers_title', 'local_courseaudit'), 5);
+        echo html_writer::table($lecturertable);
+        echo html_writer::tag('p', get_string('attention_lecturers_note', 'local_courseaudit'), ['class' => 'small text-muted mb-0']);
+        echo html_writer::end_div();
+        echo html_writer::end_div();
+    }
+
+    echo html_writer::end_div();
+}
 
 // Charts - the bar chart and pies all reflect the filters below, so drilling down (e.g.
 // School = SOB) updates every chart, not just the table. Nothing to show yet until at least

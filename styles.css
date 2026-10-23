@@ -77,3 +77,10 @@ body.path-local-courseaudit #page.drawers {
     .local_courseaudit-chartbox-pie .chart-image,
     .local_courseaudit-chartbox-wide .chart-image { height: 260px; }
 }
+
+/* Compliance pills in the "needs attention" lists - same thresholds as the KPI cards. */
+.local_courseaudit-pill-good { background: #2E8B57; color: #fff; }
+.local_courseaudit-pill-warn { background: #CBAE2D; color: #192C57; }
+.local_courseaudit-pill-poor { background: #C0392B; color: #fff; }
+.local_courseaudit-pill-none { background: #9AA5B8; color: #fff; }
+.local_courseaudit-attention table { width: 100%; }
