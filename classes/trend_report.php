@@ -18,7 +18,7 @@ namespace local_courseaudit;
 
 /**
  * Turns the daily snapshots written by trend_snapshot into what the dashboard shows: a
- * day-or-week time series, week-on-week KPI deltas, and weekly activity counts.
+ * day-or-week time series and week-on-week KPI deltas.
  *
  * Everything except fetch_daily() is pure (arrays in, arrays out) and unit tested without Moodle.
  *
@@ -199,54 +199,6 @@ class trend_report {
             'courses' => (int) $daily[$latest]['courses'],
             'metrics' => $metrics,
         ];
-    }
-
-    /**
-     * Courses added to the audit, and courses marked Reviewed, per week.
-     *
-     * @param int[] $addedtimes Timestamps (a.timecreated of every audited course).
-     * @param int[] $reviewedtimes Timestamps (a.reviewedtime of every reviewed course).
-     * @param int $weeks How many trailing weeks to show; 0 means from the earliest event.
-     * @param int $now Current timestamp.
-     * @param \DateTimeZone $timezone
-     * @return array ['labels' => string[], 'added' => int[], 'reviewed' => int[]]
-     */
-    public static function weekly_activity(array $addedtimes, array $reviewedtimes, int $weeks, int $now,
-            \DateTimeZone $timezone): array {
-        $weekstart = static function (int $timestamp) use ($timezone): \DateTimeImmutable {
-            return (new \DateTimeImmutable('@' . $timestamp))->setTimezone($timezone)
-                ->modify('monday this week')->setTime(0, 0);
-        };
-
-        $all = array_merge($addedtimes, $reviewedtimes);
-        $first = $weeks > 0
-            ? $weekstart($now)->modify('-' . ($weeks - 1) . ' weeks')
-            : (empty($all) ? $weekstart($now) : $weekstart(min($all)));
-        $last = $weekstart($now);
-
-        $labels = [];
-        $index = [];
-        for ($week = $first; $week <= $last; $week = $week->modify('+1 week')) {
-            $index[$week->format('Ymd')] = count($labels);
-            $labels[] = $week->format('j M');
-        }
-
-        $added = array_fill(0, count($labels), 0);
-        $reviewed = array_fill(0, count($labels), 0);
-        foreach ($addedtimes as $time) {
-            $slot = $index[$weekstart((int) $time)->format('Ymd')] ?? null;
-            if ($slot !== null) {
-                $added[$slot]++;
-            }
-        }
-        foreach ($reviewedtimes as $time) {
-            $slot = $index[$weekstart((int) $time)->format('Ymd')] ?? null;
-            if ($slot !== null) {
-                $reviewed[$slot]++;
-            }
-        }
-
-        return ['labels' => $labels, 'added' => $added, 'reviewed' => $reviewed];
     }
 
     /**

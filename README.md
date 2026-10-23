@@ -66,9 +66,6 @@ The dashboard uses it for:
   feedback; "reviewed" is a workflow measure and is not part of it.
 - **Compliance over time** - one line per requirement group, viewable **by day or by week**
   (a week shows its last snapshot) over the last 4/12/26 weeks or all time.
-- **Weekly activity** - courses added to the audit vs courses marked Reviewed each week
-  (Reviewed time is stored in `reviewedtime`; rows reviewed before the upgrade use their last
-  modified time).
 
 Trends follow the Category and School filters only (a daily snapshot can't be re-filtered by a
 search term afterwards). A category-scoped viewer only ever sees trends for their own categories.

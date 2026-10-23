@@ -182,37 +182,4 @@ final class trend_test extends \basic_testcase {
     public function test_kpis_without_snapshots_is_null(): void {
         $this->assertNull(trend_report::kpis([]));
     }
-
-    protected static function ts(string $datetime): int {
-        return (new \DateTimeImmutable($datetime, new \DateTimeZone('UTC')))->getTimestamp();
-    }
-
-    public function test_weekly_activity_counts_per_iso_week_and_ignores_out_of_range(): void {
-        $utc = new \DateTimeZone('UTC');
-        $activity = trend_report::weekly_activity(
-            [self::ts('2026-10-06 10:00'), self::ts('2026-10-14 10:00'), self::ts('2026-10-20 10:00'),
-                self::ts('2026-10-22 10:00'), self::ts('2026-09-01 10:00')],
-            [self::ts('2026-10-21 10:00')],
-            3,
-            self::ts('2026-10-23 12:00'),
-            $utc
-        );
-
-        $this->assertSame(['5 Oct', '12 Oct', '19 Oct'], $activity['labels']);
-        $this->assertSame([1, 1, 2], $activity['added']);
-        $this->assertSame([0, 0, 1], $activity['reviewed']);
-    }
-
-    public function test_weekly_activity_all_time_starts_at_the_earliest_event(): void {
-        $activity = trend_report::weekly_activity(
-            [self::ts('2026-09-01 10:00')], [], 0, self::ts('2026-10-23 12:00'), new \DateTimeZone('UTC'));
-        $this->assertCount(8, $activity['labels']); // 31 Aug ... 19 Oct.
-        $this->assertSame(1, $activity['added'][0]);
-    }
-
-    public function test_weekly_activity_with_no_events(): void {
-        $activity = trend_report::weekly_activity([], [], 0, self::ts('2026-10-23 12:00'), new \DateTimeZone('UTC'));
-        $this->assertSame(['19 Oct'], $activity['labels']);
-        $this->assertSame([0], $activity['added']);
-    }
 }

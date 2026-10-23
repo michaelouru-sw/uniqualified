@@ -352,24 +352,9 @@ $trendlabels = [
     'feedback' => get_string('kpi_feedback', 'local_courseaudit'),
     'reviewed' => get_string('kpi_reviewed', 'local_courseaudit'),
 ];
-$trendchart = dashboard_charts::trend_chart($trendbuckets, $trendlabels,
+// The "reviewed" metric stays a KPI card but is a workflow measure, not a requirement, so it isn't drawn as a line.
+$trendchart = dashboard_charts::trend_chart($trendbuckets, array_diff_key($trendlabels, ['reviewed' => true]),
     get_string('trend_chart_title', 'local_courseaudit'));
-
-$activitytimes = $DB->get_records_sql("SELECT a.id, a.timecreated, a.reviewed, a.reviewedtime $fromwheresql", $params);
-$addedtimes = [];
-$reviewedtimes = [];
-foreach ($activitytimes as $activityrow) {
-    $addedtimes[] = (int) $activityrow->timecreated;
-    if (!empty($activityrow->reviewed) && !empty($activityrow->reviewedtime)) {
-        $reviewedtimes[] = (int) $activityrow->reviewedtime;
-    }
-}
-$activitychart = dashboard_charts::activity_chart(
-    trend_report::weekly_activity($addedtimes, $reviewedtimes, $trendweeks, time(), \core_date::get_server_timezone_object()),
-    get_string('trend_added', 'local_courseaudit'),
-    get_string('trend_reviewed_count', 'local_courseaudit'),
-    get_string('trend_activity_title', 'local_courseaudit')
-);
 
 if ($kpis !== null) {
     $compareday = $kpis['baselinegap'] ?? 7;
@@ -401,18 +386,11 @@ echo html_writer::end_div();
 
 if ($trendchart) {
     echo html_writer::start_div('row local_courseaudit-chartrow');
-    echo html_writer::start_div($activitychart ? 'col-lg-7 mb-3' : 'col-12 mb-3');
-    echo html_writer::start_div('local_courseaudit-chartbox h-100');
+    echo html_writer::start_div('col-12 mb-3');
+    echo html_writer::start_div('local_courseaudit-chartbox');
     echo $OUTPUT->render_chart($trendchart, false);
     echo html_writer::end_div();
     echo html_writer::end_div();
-    if ($activitychart) {
-        echo html_writer::start_div('col-lg-5 mb-3');
-        echo html_writer::start_div('local_courseaudit-chartbox h-100');
-        echo $OUTPUT->render_chart($activitychart, false);
-        echo html_writer::end_div();
-        echo html_writer::end_div();
-    }
     echo html_writer::end_div();
     echo html_writer::tag('p', get_string('trend_scope_note', 'local_courseaudit'), ['class' => 'text-muted small']);
 } else {

@@ -187,9 +187,6 @@ $string['privacy:metadata'] = 'The Uniqualified plugin stores lecturer names cop
 // Trends and KPI cards.
 $string['trend_heading'] = 'Trends';
 $string['trend_chart_title'] = 'Compliance over time (% of audited courses)';
-$string['trend_activity_title'] = 'Weekly activity';
-$string['trend_added'] = 'Courses added to audit';
-$string['trend_reviewed_count'] = 'Courses reviewed';
 $string['trend_grain'] = 'View by';
 $string['trend_grain_day'] = 'Day';
 $string['trend_grain_week'] = 'Week';

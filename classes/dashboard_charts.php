@@ -356,11 +356,10 @@ class dashboard_charts {
         'attendance' => '#2A9D8F',
         'materials' => '#C8553D',
         'feedback' => '#7B5EA7',
-        'reviewed' => '#9AA5B8',
     ];
 
     /**
-     * Compliance over time: one line per requirement group, plus overall and % reviewed.
+     * Compliance over time: one line per requirement group, plus overall.
      *
      * @param array[] $buckets As returned by trend_report::bucket().
      * @param string[] $serieslabels Translated series name per metric key (also decides which lines are drawn).
@@ -392,35 +391,6 @@ class dashboard_charts {
         $yaxis->set_min(0);
         $yaxis->set_max(100);
         $yaxis->set_label('%');
-
-        return $chart;
-    }
-
-    /**
-     * Courses added to the audit vs. courses marked Reviewed, per week.
-     *
-     * @param array $activity As returned by trend_report::weekly_activity().
-     * @param string $addedlabel
-     * @param string $reviewedlabel
-     * @param string $title
-     * @return \core\chart_bar|null Null when nothing happened in the period.
-     */
-    public static function activity_chart(array $activity, string $addedlabel, string $reviewedlabel,
-            string $title): ?\core\chart_bar {
-        if (array_sum($activity['added']) + array_sum($activity['reviewed']) === 0) {
-            return null;
-        }
-
-        $chart = new \core\chart_bar();
-        $chart->set_title($title);
-        $chart->set_labels($activity['labels']);
-
-        $added = new \core\chart_series($addedlabel, $activity['added']);
-        $added->set_color(self::BRAND_BLUE);
-        $reviewed = new \core\chart_series($reviewedlabel, $activity['reviewed']);
-        $reviewed->set_color(self::BRAND_GOLD);
-        $chart->add_series($added);
-        $chart->add_series($reviewed);
 
         return $chart;
     }
