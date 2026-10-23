@@ -11,21 +11,6 @@ body.path-local-courseaudit #page.drawers {
     width: 100% !important;
 }
 
-/* Pie charts (Courses by programme level / by school / students vs teachers) get a fixed,
- * modest height so Chart.js's own responsive resizing (responsive: true, maintainAspectRatio:
- * false - see lib/amd/src/chart_output_chartjs.js) has a bounded box to fill within its Bootstrap
- * column instead of growing wide enough that the row of three needs horizontal scrolling to see
- * them all. Scoped to this plugin's own wrapper class, not core's generic .chart-area, so it
- * can't affect any other chart rendered elsewhere on the site. */
-.local_courseaudit-piechart-wrapper .chart-area,
-.local_courseaudit-piechart-wrapper .chart-image {
-    position: relative;
-    width: 100%;
-    height: 240px;
-}
-.local_courseaudit-piechart-wrapper canvas {
-    max-width: 100%;
-}
 
 /* KPI cards: one metric each, coloured by status, with change since last week and a sparkline. */
 .local_courseaudit-kpi {
@@ -60,11 +45,35 @@ body.path-local-courseaudit #page.drawers {
 .local_courseaudit-kpi-spark { color: #192C57; height: 28px; margin-top: 2px; }
 .local_courseaudit-spark { display: block; }
 
-/* Trend charts: a fixed height keeps the line chart readable and the page layout stable. */
-.local_courseaudit-trend-chart .chart-area,
-.local_courseaudit-trend-chart .chart-image {
-    position: relative;
-    width: 100%;
-    height: 300px;
-}
 .local_courseaudit-trend-controls a { margin-right: 4px; }
+
+/* Shared chart box. Every dashboard chart sits in one of these so they line up and can't overlap:
+ * - the box clips anything wider than itself and has a border/padding so neighbours never touch;
+ * - only the inner .chart-image has a fixed height (Chart.js is responsive with
+ *   maintainAspectRatio:false, so it fills exactly that and no more); the box itself is auto-height,
+ *   so core's collapsible "chart data" table can open underneath without being clipped or
+ *   spilling onto the next chart;
+ * - grid columns get min-width:0, otherwise a flex child with a wide canvas refuses to shrink and
+ *   pushes into the column beside it (the usual cause of overlapping charts). */
+.local_courseaudit-chartrow > [class*="col-"] { min-width: 0; }
+.local_courseaudit-chartbox {
+    position: relative;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #dde2ea;
+    border-radius: 6px;
+}
+.local_courseaudit-chartbox .chart-area { position: relative; width: 100%; max-width: 100%; }
+.local_courseaudit-chartbox .chart-image { position: relative; width: 100%; height: 300px; }
+.local_courseaudit-chartbox-pie .chart-image { height: 240px; }
+.local_courseaudit-chartbox-wide .chart-image { height: 340px; }
+.local_courseaudit-chartbox canvas { display: block; max-width: 100%; }
+@media (max-width: 575.98px) {
+    .local_courseaudit-chartbox .chart-image,
+    .local_courseaudit-chartbox-pie .chart-image,
+    .local_courseaudit-chartbox-wide .chart-image { height: 260px; }
+}

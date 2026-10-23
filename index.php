@@ -398,15 +398,15 @@ foreach ([4, 12, 26, 0] as $weeks) {
 echo html_writer::end_div();
 
 if ($trendchart) {
-    echo html_writer::start_div('row');
+    echo html_writer::start_div('row local_courseaudit-chartrow');
     echo html_writer::start_div($activitychart ? 'col-lg-7 mb-3' : 'col-12 mb-3');
-    echo html_writer::start_div('local_courseaudit-trend-chart');
+    echo html_writer::start_div('local_courseaudit-chartbox h-100');
     echo $OUTPUT->render_chart($trendchart, false);
     echo html_writer::end_div();
     echo html_writer::end_div();
     if ($activitychart) {
         echo html_writer::start_div('col-lg-5 mb-3');
-        echo html_writer::start_div('local_courseaudit-trend-chart');
+        echo html_writer::start_div('local_courseaudit-chartbox h-100');
         echo $OUTPUT->render_chart($activitychart, false);
         echo html_writer::end_div();
         echo html_writer::end_div();
@@ -429,9 +429,11 @@ if ($compliancechart || $piecharts) {
     // Compliance rate (stacked bar) gets its own full-width row - it needs the horizontal room
     // to stay readable.
     if ($compliancechart) {
-        echo html_writer::start_div('row mb-3');
+        echo html_writer::start_div('row mb-3 local_courseaudit-chartrow');
         echo html_writer::start_div('col-md-12');
+        echo html_writer::start_div('local_courseaudit-chartbox local_courseaudit-chartbox-wide');
         echo $OUTPUT->render_chart($compliancechart, false);
+        echo html_writer::end_div();
         echo html_writer::end_div();
         echo html_writer::end_div();
     }
@@ -446,10 +448,10 @@ if ($compliancechart || $piecharts) {
     if ($piecharts) {
         $piecount = count($piecharts);
         $piecolclass = $piecount === 1 ? 'col-md-12' : ($piecount === 2 ? 'col-sm-6 col-md-6' : 'col-sm-6 col-md-4');
-        echo html_writer::start_div('row mb-3');
+        echo html_writer::start_div('row mb-3 local_courseaudit-chartrow');
         foreach ($piecharts as $chart) {
-            echo html_writer::start_div($piecolclass);
-            echo html_writer::start_div('local_courseaudit-piechart-wrapper');
+            echo html_writer::start_div($piecolclass . ' mb-3');
+            echo html_writer::start_div('local_courseaudit-chartbox local_courseaudit-chartbox-pie h-100');
             echo $OUTPUT->render_chart($chart, false);
             echo html_writer::end_div();
             echo html_writer::end_div();
