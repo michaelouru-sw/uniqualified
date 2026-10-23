@@ -43,7 +43,11 @@ class heuristics {
     /** @var string[] Activity module types that are themselves a live-class/attendance integration. */
     const ATTENDANCE_MODNAMES = ['zoom', 'bigbluebuttonbn'];
 
-    /** @var string[] Hostnames in a URL resource's link that count as an attendance/class link. */
+    /**
+     * @var string[] Providers whose links count as an attendance/class link. Informational only:
+     * the actual matching (host + path shape) lives in meeting_link_detector, which no longer
+     * treats a bare hostname substring as enough.
+     */
     const ATTENDANCE_URL_HOSTS = ['zoom.us', 'meet.google.com', 'teams.microsoft.com'];
 
     /**
@@ -170,12 +174,17 @@ class heuristics {
     }
 
     /**
-     * "Is there a class attendance link?": a Zoom/BigBlueButton activity, or
-     * a URL resource pointing at Zoom/Google Meet/Teams.
+     * "Is there a class attendance link?": a Zoom/BigBlueButton activity, or a genuine
+     * Zoom/Google Meet/Teams meeting link (see meeting_link_detector for what counts) in a URL
+     * resource, a label, a page, or a section summary.
      *
-     * Fetches every URL resource's externalurl in a single query (rather than
-     * one query per URL cm) - matters on courses with many URL resources, and
-     * compounds across a full site refresh with thousands of courses.
+     * Only visible activities/sections count: a link students can't see isn't a working
+     * attendance link. Hidden ones are listed in the evidence as "ignored" so a reviewer can see
+     * why a course that "has a link" was still marked No.
+     *
+     * Each text source is fetched in a single query per module type (rather than one query per
+     * cm) - matters on courses with many activities, and compounds across a full site refresh
+     * with thousands of courses.
      *
      * @param \course_modinfo $modinfo
      * @return array
@@ -183,34 +192,82 @@ class heuristics {
     protected static function detect_attendance_link(\course_modinfo $modinfo): array {
         global $DB;
 
+        // Module types whose link lives in a text/url column, and which column that is.
+        $textcolumns = ['url' => 'externalurl', 'label' => 'intro', 'page' => 'content'];
+
         $found = [];
-        $urlinstanceids = [];
+        $ignored = [];
+        $idsbymod = array_fill_keys(array_keys($textcolumns), []);
+        $cmsbymod = array_fill_keys(array_keys($textcolumns), []);
+
         foreach ($modinfo->get_cms() as $cm) {
+            if (!empty($cm->deletioninprogress)) {
+                continue;
+            }
+            $visible = (bool) $cm->visible;
+
             if (in_array($cm->modname, self::ATTENDANCE_MODNAMES, true)) {
-                $found[] = "{$cm->modname}: {$cm->name}";
-            } else if ($cm->modname === 'url') {
-                $urlinstanceids[] = $cm->instance;
+                if ($visible) {
+                    $found[] = "{$cm->modname}: {$cm->name}";
+                } else {
+                    $ignored[] = "ignored (hidden) {$cm->modname}: {$cm->name}";
+                }
+            } else if (isset($textcolumns[$cm->modname])) {
+                $idsbymod[$cm->modname][] = $cm->instance;
+                $cmsbymod[$cm->modname][$cm->instance] = $cm;
             }
         }
 
-        $urlrecords = empty($urlinstanceids)
-            ? []
-            : $DB->get_records_list('url', 'id', $urlinstanceids, '', 'id, externalurl');
-
-        foreach ($modinfo->get_cms() as $cm) {
-            if ($cm->modname !== 'url' || empty($urlrecords[$cm->instance]->externalurl)) {
+        foreach ($textcolumns as $modname => $column) {
+            if (empty($idsbymod[$modname])) {
                 continue;
             }
-            $externalurl = $urlrecords[$cm->instance]->externalurl;
-            foreach (self::ATTENDANCE_URL_HOSTS as $host) {
-                if (stripos($externalurl, $host) !== false) {
-                    $found[] = "url ({$host}): {$cm->name}";
-                    break;
+            $records = $DB->get_records_list($modname, 'id', $idsbymod[$modname], '', "id, {$column}");
+            foreach ($records as $record) {
+                $cm = $cmsbymod[$modname][$record->id] ?? null;
+                if ($cm === null) {
+                    continue;
+                }
+                foreach (self::links_in_text($record->{$column}) as $hit) {
+                    if ($cm->visible) {
+                        $found[] = "{$modname} ({$hit['label']}): {$cm->name}";
+                    } else {
+                        $ignored[] = "ignored (hidden) {$modname} ({$hit['label']}): {$cm->name}";
+                    }
                 }
             }
         }
 
-        return ['value' => empty($found) ? 'No' : 'Yes', 'evidence' => $found];
+        // Section summaries are already loaded with modinfo - no query needed.
+        foreach ($modinfo->get_section_info_all() as $sectioninfo) {
+            foreach (self::links_in_text($sectioninfo->summary ?? '') as $hit) {
+                $sectionname = 'section ' . (int) $sectioninfo->section;
+                if ($sectioninfo->visible) {
+                    $found[] = "section summary ({$hit['label']}): {$sectionname}";
+                } else {
+                    $ignored[] = "ignored (hidden) section summary ({$hit['label']}): {$sectionname}";
+                }
+            }
+        }
+
+        return [
+            'value' => empty($found) ? 'No' : 'Yes',
+            'evidence' => array_values(array_unique(array_merge($found, $ignored))),
+        ];
+    }
+
+    /**
+     * Meeting links found in a text/HTML/URL value, with a display label per provider.
+     *
+     * @param string|null $text
+     * @return array[] Each ['provider' => string, 'url' => string, 'label' => string].
+     */
+    protected static function links_in_text(?string $text): array {
+        $hits = meeting_link_detector::find_in_text($text);
+        foreach ($hits as &$hit) {
+            $hit['label'] = meeting_link_detector::label($hit['provider']);
+        }
+        return $hits;
     }
 
     /**
