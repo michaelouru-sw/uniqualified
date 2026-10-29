@@ -86,7 +86,7 @@ class meeting_link_detector {
         // A candidate starts at a domain boundary, optionally with a scheme, and runs to whitespace,
         // a quote, or a tag bracket. The lookbehind stops "msg.co/x" matching as "g.co/x".
         $pattern = '~(?<![a-z0-9.\-@])(?:https?://)?(?:[a-z0-9\-]+\.)*'
-            . '(?:zoom\.us|zoomgov\.com|meet\.google\.com|g\.co|teams\.microsoft\.com|teams\.live\.com|'
+            . '(?:zoom\.us|zoomgov\.com|meet\.google\.com|tel\.meet|g\.co|teams\.microsoft\.com|teams\.live\.com|'
             . 'google\.com|safelinks\.protection\.outlook\.com)'
             . '(?:[/?#][^\s"\'<>\]]*)?~i';
 
@@ -197,10 +197,16 @@ class meeting_link_detector {
         }
 
         if ($host === 'meet.google.com') {
+            // An optional account-switcher prefix (/u/0/ or /u/1/) can sit in front of any Meet path.
+            $meetpath = preg_replace('~^/u/\d+(?=/)~i', '', $path);
             // Meeting code (abc-defg-hij), a nickname lookup, or a Workspace-style /lookup/ path.
-            $ok = preg_match('~^/(?:[a-z]{3}-[a-z]{4}-[a-z]{3}|lookup/[a-z0-9._\-]+)/?$~i', $path)
-                || preg_match('~^/_meet/[a-z0-9\-]+~i', $path);
+            $ok = preg_match('~^/(?:[a-z]{3}-[a-z]{4}-[a-z]{3}|lookup/[a-z0-9._\-]+)/?$~i', $meetpath)
+                || preg_match('~^/_meet/[a-z0-9\-]+~i', $meetpath);
             return $ok ? self::MEET : null;
+        }
+        // Phone dial-in link for a Meet call: tel.meet/abc-defg-hij?pin=1234567890.
+        if ($host === 'tel.meet' && preg_match('~^/[a-z]{3}-[a-z]{4}-[a-z]{3}/?$~i', $path)) {
+            return self::MEET;
         }
         if ($host === 'g.co' && preg_match('~^/meet/[a-z0-9._\-]+/?$~i', $path)) {
             return self::MEET;

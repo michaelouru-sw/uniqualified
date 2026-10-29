@@ -41,7 +41,7 @@ namespace local_courseaudit;
 class heuristics {
 
     /** @var string[] Activity module types that are themselves a live-class/attendance integration. */
-    const ATTENDANCE_MODNAMES = ['zoom', 'bigbluebuttonbn'];
+    const ATTENDANCE_MODNAMES = ['zoom', 'bigbluebuttonbn', 'googlemeet'];
 
     /**
      * @var string[] Providers whose links count as an attendance/class link. Informational only:
@@ -192,8 +192,18 @@ class heuristics {
     protected static function detect_attendance_link(\course_modinfo $modinfo): array {
         global $DB;
 
-        // Module types whose link lives in a text/url column, and which column that is.
-        $textcolumns = ['url' => 'externalurl', 'label' => 'intro', 'page' => 'content'];
+        // Module types whose link can live in a text/url column, and which columns to read. The
+        // description ("intro") of an activity is where lecturers most often paste a Meet link next to
+        // the real content, so it is read for every type that has one.
+        $textcolumns = [
+            'url' => ['externalurl', 'intro'],
+            'label' => ['intro'],
+            'page' => ['content', 'intro'],
+            'forum' => ['intro'],
+            'assign' => ['intro'],
+            'quiz' => ['intro'],
+            'book' => ['intro'],
+        ];
 
         $found = [];
         $ignored = [];
@@ -218,24 +228,32 @@ class heuristics {
             }
         }
 
-        foreach ($textcolumns as $modname => $column) {
+        foreach ($textcolumns as $modname => $columns) {
             if (empty($idsbymod[$modname])) {
                 continue;
             }
-            $records = $DB->get_records_list($modname, 'id', $idsbymod[$modname], '', "id, {$column}");
+            $records = $DB->get_records_list($modname, 'id', $idsbymod[$modname], '', 'id, ' . implode(', ', $columns));
             foreach ($records as $record) {
                 $cm = $cmsbymod[$modname][$record->id] ?? null;
                 if ($cm === null) {
                     continue;
                 }
-                foreach (self::links_in_text($record->{$column}) as $hit) {
-                    if ($cm->visible) {
-                        $found[] = "{$modname} ({$hit['label']}): {$cm->name}";
-                    } else {
-                        $ignored[] = "ignored (hidden) {$modname} ({$hit['label']}): {$cm->name}";
+                foreach ($columns as $column) {
+                    foreach (self::links_in_text($record->{$column}) as $hit) {
+                        if ($cm->visible) {
+                            $found[] = "{$modname} ({$hit['label']}): {$cm->name}";
+                        } else {
+                            $ignored[] = "ignored (hidden) {$modname} ({$hit['label']}): {$cm->name}";
+                        }
                     }
                 }
             }
+        }
+
+        // The course's own summary (shown on the course page and in listings) - one query.
+        $coursesummary = $DB->get_field('course', 'summary', ['id' => $modinfo->get_course_id()]);
+        foreach (self::links_in_text($coursesummary ?: '') as $hit) {
+            $found[] = "course summary ({$hit['label']})";
         }
 
         // Section summaries are already loaded with modinfo - no query needed.
