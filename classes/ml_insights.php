@@ -226,4 +226,63 @@ class ml_insights {
         }
         return $counts;
     }
+
+    /**
+     * Named list of students flagged "at risk of dropping out" - one row per student per course.
+     * Same retrieval as student_dropout_counts() (core's own model API, see the class docblock),
+     * but keeps who was flagged and the model's confidence instead of only counting.
+     *
+     * @param int[]|null $courseids Restrict to these courses; null = no restriction, empty array =
+     *        restrict to nothing (same contract as course_risk_flags()).
+     * @param float $minscore Only students whose risk score is at least this (0-1).
+     * @return array[] Each: userid, courseid, score (0-1), timecreated. Sorted by score, highest first.
+     */
+    public static function student_dropout_list(?array $courseids = null, float $minscore = 0.0): array {
+        global $DB;
+
+        if (!self::analytics_available()) {
+            return [];
+        }
+        if ($courseids !== null && empty($courseids)) {
+            return [];
+        }
+        $modelrecord = $DB->get_record('analytics_models', ['target' => self::TARGET_STUDENT_DROPOUT]);
+        if (!$modelrecord || !$modelrecord->enabled || !$modelrecord->trained) {
+            return [];
+        }
+
+        $allowed = $courseids === null ? null : array_flip($courseids);
+        $model = new \core_analytics\model($modelrecord);
+        $list = [];
+        foreach ($model->get_predictions_contexts() as $contextrow) {
+            $context = \context::instance_by_id($contextrow->contextid, IGNORE_MISSING);
+            if (!$context || $context->contextlevel !== CONTEXT_COURSE) {
+                continue;
+            }
+            $courseid = (int) $context->instanceid;
+            if ($allowed !== null && !isset($allowed[$courseid])) {
+                continue;
+            }
+            list(, $predictions) = $model->get_predictions($context, false);
+            foreach ($predictions ?: [] as $prediction) {
+                $data = $prediction->get_prediction_data();
+                if ((int) $data->prediction !== 1 || (float) $data->predictionscore < $minscore) {
+                    continue;
+                }
+                $sample = $prediction->get_sample_data();
+                $userid = isset($sample['user']->id) ? (int) $sample['user']->id : 0;
+                if ($userid === 0) {
+                    continue;
+                }
+                $list[] = [
+                    'userid' => $userid,
+                    'courseid' => $courseid,
+                    'score' => (float) $data->predictionscore,
+                    'timecreated' => (int) $data->timecreated,
+                ];
+            }
+        }
+        usort($list, fn($a, $b) => $b['score'] <=> $a['score']);
+        return $list;
+    }
 }

@@ -284,6 +284,16 @@ if ($canmanage) {
     echo html_writer::end_div();
 }
 
+// At-risk students report: available to every viewer (scoped to their own categories inside the
+// page itself), not just managers - coordinators are the people who act on it.
+if ($mlavailable) {
+    echo html_writer::start_div('mb-3');
+    echo html_writer::link(new moodle_url('/local/courseaudit/atriskstudents.php', [
+        'categoryid' => $categoryid, 'school' => $school, 'programlevel' => $programlevel, 'search' => $search,
+    ]), get_string('atrisk_button', 'local_courseaudit'), ['class' => 'btn btn-secondary']);
+    echo html_writer::end_div();
+}
+
 // Refresh status - manage-only: it's about the site-wide refresh mechanism a category-scoped
 // viewer can't trigger anyway, and refreshfailures below can name specific courses from
 // categories they don't have access to.

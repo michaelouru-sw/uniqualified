@@ -217,3 +217,20 @@ $string['attention_col_change'] = 'Change';
 $string['attention_col_lecturer'] = 'Lecturer';
 $string['attention_col_average'] = 'Average';
 $string['attention_col_unreviewed'] = 'Unreviewed';
+
+// Students at risk of dropping out report.
+$string['atrisk_heading'] = 'Students at risk of dropping out';
+$string['atrisk_button'] = 'At-risk students';
+$string['atrisk_help'] = 'Students flagged by Moodle\'s "Students at risk of dropping out" analytics model, one row per student per course. Filters match the dashboard. The list is only as good as the model: it reflects Moodle\'s predictions, not a confirmed outcome.';
+$string['atrisk_notready'] = 'The "Students at risk of dropping out" model is not ready yet. In Site administration > Analytics > Analytics models, enable and train it, and make sure its predictions processor is reachable. This report fills in once it has generated predictions.';
+$string['atrisk_none'] = 'No students match: nobody is flagged for the courses and filters selected.';
+$string['atrisk_count'] = '{$a->students} student(s) flagged, {$a->rows} row(s)';
+$string['atrisk_minrisk'] = 'Minimum risk %';
+$string['atrisk_search_course'] = 'Course / unit / lecturer';
+$string['atrisk_search_student'] = 'Student name, username, ID or email';
+$string['atrisk_downloadcsv'] = 'Download CSV';
+$string['atrisk_downloadxlsx'] = 'Download Excel';
+$string['atrisk_col_student'] = 'Student';
+$string['atrisk_col_lecturer'] = 'Lecturer';
+$string['atrisk_col_risk'] = 'Risk score';
+$string['atrisk_col_flagged'] = 'Flagged on';
