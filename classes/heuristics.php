@@ -192,62 +192,109 @@ class heuristics {
     protected static function detect_attendance_link(\course_modinfo $modinfo): array {
         global $DB;
 
-        // Module types whose link can live in a text/url column, and which columns to read. The
-        // description ("intro") of an activity is where lecturers most often paste a Meet link next to
-        // the real content, so it is read for every type that has one.
+        // Explicit columns for the types where a link is most likely to be the content itself.
         $textcolumns = [
             'url' => ['externalurl', 'intro'],
             'label' => ['intro'],
             'page' => ['content', 'intro'],
-            'forum' => ['intro'],
-            'assign' => ['intro'],
-            'quiz' => ['intro'],
-            'book' => ['intro'],
+            'lti' => ['toolurl', 'securetoolurl', 'intro'],
         ];
 
         $found = [];
         $ignored = [];
-        $idsbymod = array_fill_keys(array_keys($textcolumns), []);
-        $cmsbymod = array_fill_keys(array_keys($textcolumns), []);
+        $cmsbymod = [];
 
         foreach ($modinfo->get_cms() as $cm) {
             if (!empty($cm->deletioninprogress)) {
                 continue;
             }
-            $visible = (bool) $cm->visible;
-
             if (in_array($cm->modname, self::ATTENDANCE_MODNAMES, true)) {
-                if ($visible) {
+                if ($cm->visible) {
                     $found[] = "{$cm->modname}: {$cm->name}";
                 } else {
                     $ignored[] = "ignored (hidden) {$cm->modname}: {$cm->name}";
                 }
-            } else if (isset($textcolumns[$cm->modname])) {
-                $idsbymod[$cm->modname][] = $cm->instance;
+            } else {
                 $cmsbymod[$cm->modname][$cm->instance] = $cm;
             }
         }
 
-        foreach ($textcolumns as $modname => $columns) {
-            if (empty($idsbymod[$modname])) {
+        $record_hit = static function (string $source, \cm_info $cm, array $hit) use (&$found, &$ignored): void {
+            if ($cm->visible) {
+                $found[] = "{$source} ({$hit['label']}): {$cm->name}";
+            } else {
+                $ignored[] = "ignored (hidden) {$source} ({$hit['label']}): {$cm->name}";
+            }
+        };
+
+        // 1. The activity itself: its link/content columns, and the description ("intro") of EVERY
+        //    activity type that has one - a Meet link pasted into any activity's description counts.
+        foreach ($cmsbymod as $modname => $cms) {
+            $columns = $textcolumns[$modname] ?? ['intro'];
+            $existing = array_keys($DB->get_columns($modname));
+            $columns = array_values(array_intersect($columns, $existing));
+            if (empty($columns)) {
                 continue;
             }
-            $records = $DB->get_records_list($modname, 'id', $idsbymod[$modname], '', 'id, ' . implode(', ', $columns));
+            $records = $DB->get_records_list($modname, 'id', array_keys($cms), '', 'id, ' . implode(', ', $columns));
             foreach ($records as $record) {
-                $cm = $cmsbymod[$modname][$record->id] ?? null;
-                if ($cm === null) {
-                    continue;
-                }
                 foreach ($columns as $column) {
                     foreach (self::links_in_text($record->{$column}) as $hit) {
-                        if ($cm->visible) {
-                            $found[] = "{$modname} ({$hit['label']}): {$cm->name}";
-                        } else {
-                            $ignored[] = "ignored (hidden) {$modname} ({$hit['label']}): {$cm->name}";
-                        }
+                        $record_hit($modname, $cms[$record->id], $hit);
                     }
                 }
             }
+        }
+
+        // 2. Content that lives inside an activity: forum posts (incl. Announcements), book chapters,
+        //    lesson pages, glossary entries and wiki pages. Each is one query per course, pre-filtered
+        //    in SQL to rows that mention a Meet/Zoom/Teams host at all, so a large forum is not pulled
+        //    into PHP just to be scanned.
+        $needles = ['meet.google.com', 'tel.meet', 'g.co/meet', 'zoom.us', 'zoomgov.com', 'teams.microsoft.com',
+            'teams.live.com', 'zoommtg', 'google.com/url', 'safelinks.protection'];
+        $likeparams = [];
+        $likes = [];
+        foreach ($needles as $n => $needle) {
+            $likes[] = $DB->sql_like('{{COL}}', ':needle' . $n, false);
+            $likeparams['needle' . $n] = '%' . $DB->sql_like_escape($needle) . '%';
+        }
+        $deep = [
+            'forum' => ["SELECT p.id, d.forum AS instanceid, p.message AS body FROM {forum_posts} p "
+                . "JOIN {forum_discussions} d ON d.id = p.discussion WHERE d.course = :courseid AND p.deleted = 0", 'p.message', 'forum post'],
+            'book' => ["SELECT c.id, c.bookid AS instanceid, c.content AS body FROM {book_chapters} c WHERE c.hidden = 0 AND c.bookid IN (%IDS%)",
+                'c.content', 'book chapter'],
+            'lesson' => ["SELECT c.id, c.lessonid AS instanceid, c.contents AS body FROM {lesson_pages} c WHERE c.lessonid IN (%IDS%)",
+                'c.contents', 'lesson page'],
+            'glossary' => ["SELECT c.id, c.glossaryid AS instanceid, c.definition AS body FROM {glossary_entries} c "
+                . "WHERE c.glossaryid IN (%IDS%) AND c.approved = 1", 'c.definition', 'glossary entry'],
+            'wiki' => ["SELECT c.id, s.wikiid AS instanceid, c.cachedcontent AS body FROM {wiki_pages} c "
+                . "JOIN {wiki_subwikis} s ON s.id = c.subwikiid WHERE s.wikiid IN (%IDS%)", 'c.cachedcontent', 'wiki page'],
+        ];
+        foreach ($deep as $modname => [$sql, $column, $source]) {
+            if (empty($cmsbymod[$modname])) {
+                continue;
+            }
+            $params = $likeparams;
+            if (strpos($sql, ':courseid') !== false) {
+                $params['courseid'] = $modinfo->get_course_id();
+            }
+            if (strpos($sql, '%IDS%') !== false) {
+                list($insql, $inparams) = $DB->get_in_or_equal(array_keys($cmsbymod[$modname]), SQL_PARAMS_NAMED, 'inst');
+                $sql = str_replace('IN (%IDS%)', $insql, $sql);
+                $params += $inparams;
+            }
+            $filter = '(' . str_replace('{{COL}}', $column, implode(' OR ', $likes)) . ')';
+            $rows = $DB->get_recordset_sql("$sql AND $filter", $params);
+            foreach ($rows as $row) {
+                $cm = $cmsbymod[$modname][$row->instanceid] ?? null;
+                if ($cm === null) {
+                    continue;
+                }
+                foreach (self::links_in_text($row->body) as $hit) {
+                    $record_hit($source, $cm, $hit);
+                }
+            }
+            $rows->close();
         }
 
         // The course's own summary (shown on the course page and in listings) - one query.
