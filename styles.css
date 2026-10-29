@@ -12,37 +12,47 @@ body.path-local-courseaudit #page.drawers {
 }
 
 
-/* KPI cards: one metric each, coloured by status, with change since last week and a sparkline. */
+/* KPI cards: label, big number, status bar, "N of M" caption; change and sparkline only when there is history. */
 .local_courseaudit-kpi {
     border: 1px solid #dde2ea;
-    border-left: 5px solid #9AA5B8;
-    border-radius: 6px;
-    padding: 10px 12px 6px;
+    border-radius: 10px;
+    padding: 12px 14px;
     background: #fff;
     height: 100%;
+    box-shadow: 0 1px 2px rgba(25, 44, 87, 0.06);
 }
-.local_courseaudit-kpi-good { border-left-color: #2E8B57; }
-.local_courseaudit-kpi-warn { border-left-color: #CBAE2D; }
-.local_courseaudit-kpi-poor { border-left-color: #C0392B; }
 .local_courseaudit-kpi-label {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: #5a6475;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
 }
 .local_courseaudit-kpi-value {
-    font-size: 1.9rem;
+    font-size: 2rem;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.15;
+    margin: 2px 0 8px;
     color: #192C57;
 }
+.local_courseaudit-kpi-good .local_courseaudit-kpi-value { color: #1e6b43; }
+.local_courseaudit-kpi-warn .local_courseaudit-kpi-value { color: #8a7418; }
+.local_courseaudit-kpi-poor .local_courseaudit-kpi-value { color: #a5321f; }
 .local_courseaudit-kpi-value small { font-size: 1rem; font-weight: 600; margin-left: 1px; }
-.local_courseaudit-kpi-delta { font-size: 0.8rem; min-height: 1.1em; }
+.local_courseaudit-kpi-bar { height: 6px; border-radius: 3px; background: #e8ebf1; overflow: hidden; }
+.local_courseaudit-kpi-barfill { height: 100%; border-radius: 3px; }
+.local_courseaudit-fill-good { background: #2E8B57; }
+.local_courseaudit-fill-warn { background: #CBAE2D; }
+.local_courseaudit-fill-poor { background: #C0392B; }
+.local_courseaudit-fill-none { background: #9AA5B8; }
+.local_courseaudit-kpi-caption { font-size: 0.8rem; color: #5a6475; margin-top: 6px; }
+.local_courseaudit-kpi-trend { margin-top: 6px; gap: 8px; }
+.local_courseaudit-kpi-delta { font-size: 0.8rem; white-space: nowrap; }
 .local_courseaudit-kpi-compare { color: #7a8394; }
 .local_courseaudit-delta-up { color: #1e7a46; }
 .local_courseaudit-delta-down { color: #b03a2e; }
 .local_courseaudit-delta-flat { color: #6b7587; }
-.local_courseaudit-kpi-spark { color: #192C57; height: 28px; margin-top: 2px; }
+.local_courseaudit-kpi-spark { color: #192C57; height: 28px; }
 .local_courseaudit-spark { display: block; }
 
 .local_courseaudit-trend-controls a { margin-right: 4px; }

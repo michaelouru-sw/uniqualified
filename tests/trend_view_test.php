@@ -76,4 +76,18 @@ final class trend_view_test extends \basic_testcase {
         $this->assertStringNotContainsString('<b>Overall', $html);
         $this->assertStringNotContainsString('Template', $html); // No data - no card.
     }
+
+    public function test_cards_show_progress_bar_caption_and_hide_empty_trend_row(): void {
+        $kpis = ['metrics' => [
+            'template' => ['value' => 46.5, 'previous' => null, 'delta' => null, 'spark' => [46.5]],
+        ]];
+        $html = trend_view::cards($kpis, ['template' => 'Template'], 'pts', 'vs 7 days ago',
+            ['template' => '620 of 1,332 courses']);
+
+        $this->assertStringContainsString('width:46.5%', $html);
+        $this->assertStringContainsString('local_courseaudit-fill-poor', $html);
+        $this->assertStringContainsString('620 of 1,332 courses', $html);
+        // No change and no sparkline yet - so no empty trend row either.
+        $this->assertStringNotContainsString('local_courseaudit-kpi-trend', $html);
+    }
 }

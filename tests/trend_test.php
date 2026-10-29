@@ -199,4 +199,14 @@ final class trend_test extends \basic_testcase {
         $this->assertSame([6, 7], $series['materials']);
         $this->assertSame([8, 11], $series['cats']);
     }
+
+    public function test_counts_give_the_numbers_behind_each_percentage(): void {
+        $counts = trend_report::counts([
+            'courses' => 10, 'reviewed' => 3, 'templateyes' => 4, 'attendanceyes' => 2, 'materialsyes' => 6, 'catsyes' => 8,
+            'assign1yes' => 1, 'assign2yes' => 2, 'assign3yes' => 0, 'cat1yes' => 3, 'cat2yes' => 4,
+        ]);
+        $this->assertSame(['count' => 4, 'total' => 10], $counts['template']);
+        $this->assertSame(['count' => 10, 'total' => 50], $counts['feedback']); // Items, not courses.
+        $this->assertSame(['count' => 3, 'total' => 10], $counts['reviewed']);
+    }
 }

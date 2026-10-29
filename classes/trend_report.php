@@ -162,6 +162,32 @@ class trend_report {
     }
 
     /**
+     * The raw numbers behind each percentage, for "N of M" captions on the KPI cards.
+     *
+     * Feedback counts items (three assignments and two CATs per course), not courses, so its total
+     * is five times the course count. Overall is an average of the requirement percentages and has
+     * no count of its own.
+     *
+     * @param array $totals One day's totals row, as built by daily_totals().
+     * @return array<string, array{count: int, total: int}> Keyed like PERCENT_KEYS (without overall).
+     */
+    public static function counts(array $totals): array {
+        $courses = (int) ($totals['courses'] ?? 0);
+        $feedback = 0;
+        foreach (['assign1yes', 'assign2yes', 'assign3yes', 'cat1yes', 'cat2yes'] as $column) {
+            $feedback += (int) ($totals[$column] ?? 0);
+        }
+        return [
+            'template' => ['count' => (int) ($totals['templateyes'] ?? 0), 'total' => $courses],
+            'attendance' => ['count' => (int) ($totals['attendanceyes'] ?? 0), 'total' => $courses],
+            'materials' => ['count' => (int) ($totals['materialsyes'] ?? 0), 'total' => $courses],
+            'cats' => ['count' => (int) ($totals['catsyes'] ?? 0), 'total' => $courses],
+            'feedback' => ['count' => $feedback, 'total' => $courses * 5],
+            'reviewed' => ['count' => (int) ($totals['reviewed'] ?? 0), 'total' => $courses],
+        ];
+    }
+
+    /**
      * Headline numbers with change since about a week earlier, plus a sparkline series.
      *
      * The baseline is the newest snapshot at least $comparedays older than the latest; if the
@@ -199,6 +225,7 @@ class trend_report {
         $latestpct = self::percentages($daily[$latest]);
         $baselinepct = $baseline !== null ? self::percentages($daily[$baseline]) : null;
 
+        $counts = self::counts($daily[$latest]);
         $metrics = [];
         foreach (self::PERCENT_KEYS as $key) {
             $series = [];
@@ -211,6 +238,8 @@ class trend_report {
             $value = $latestpct[$key];
             $previous = $baselinepct[$key] ?? null;
             $metrics[$key] = [
+                'count' => $counts[$key]['count'] ?? null,
+                'total' => $counts[$key]['total'] ?? null,
                 'value' => $value,
                 'previous' => $previous,
                 'delta' => ($value !== null && $previous !== null) ? round($value - $previous, 1) : null,

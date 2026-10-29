@@ -108,15 +108,19 @@ class trend_view {
     }
 
     /**
-     * The row of KPI cards.
+     * The row of KPI cards: label, big value, a status-coloured progress bar, an "N of M" caption,
+     * and - only when there is history to show - the change since last week and a sparkline.
+     * A card with nothing to say in a row simply has no row, so there is no empty space.
      *
      * @param array $kpis As returned by trend_report::kpis().
-     * @param string[] $labels Card title per metric key (translated).
+     * @param string[] $labels Card title per metric key (translated); also decides which cards are drawn.
      * @param string $unit Translated points unit, e.g. 'pts'.
      * @param string $comparelabel Translated "vs last week" style caption.
+     * @param string[] $captions Optional translated caption per metric key, e.g. "620 of 1,332 courses".
      * @return string
      */
-    public static function cards(array $kpis, array $labels, string $unit, string $comparelabel): string {
+    public static function cards(array $kpis, array $labels, string $unit, string $comparelabel, array $captions = []): string {
+        $esc = static fn(string $text): string => htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
         $html = '<div class="local_courseaudit-kpis row">';
         foreach ($labels as $key => $label) {
             $metric = $kpis['metrics'][$key] ?? null;
@@ -124,20 +128,30 @@ class trend_view {
                 continue;
             }
             $value = (float) $metric['value'];
+            $status = self::status($value);
             $delta = self::delta($metric['delta'], $unit);
             $display = rtrim(rtrim(number_format($value, 1), '0'), '.');
+            $width = max(0, min(100, $value));
+            $spark = self::sparkline($metric['spark']);
 
             $html .= '<div class="col-6 col-md-4 col-xl-2 mb-3">'
-                . '<div class="local_courseaudit-kpi local_courseaudit-kpi-' . self::status($value) . '">'
-                . '<div class="local_courseaudit-kpi-label">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<div class="local_courseaudit-kpi local_courseaudit-kpi-' . $status . '">'
+                . '<div class="local_courseaudit-kpi-label">' . $esc($label) . '</div>'
                 . '<div class="local_courseaudit-kpi-value">' . $display . '<small>%</small></div>'
-                . '<div class="local_courseaudit-kpi-delta local_courseaudit-delta-' . $delta['tone'] . '">'
-                . htmlspecialchars($delta['text'], ENT_QUOTES, 'UTF-8')
-                . ($delta['text'] !== '' ? ' <span class="local_courseaudit-kpi-compare">'
-                    . htmlspecialchars($comparelabel, ENT_QUOTES, 'UTF-8') . '</span>' : '')
-                . '</div>'
-                . '<div class="local_courseaudit-kpi-spark">' . self::sparkline($metric['spark']) . '</div>'
-                . '</div></div>';
+                . '<div class="local_courseaudit-kpi-bar" role="img" aria-label="' . $esc($display . '%') . '">'
+                . '<div class="local_courseaudit-kpi-barfill local_courseaudit-fill-' . $status . '" style="width:' . $width . '%"></div>'
+                . '</div>';
+            if (!empty($captions[$key])) {
+                $html .= '<div class="local_courseaudit-kpi-caption">' . $esc($captions[$key]) . '</div>';
+            }
+            if ($delta['text'] !== '' || $spark !== '') {
+                $html .= '<div class="local_courseaudit-kpi-trend d-flex align-items-center justify-content-between">'
+                    . '<div class="local_courseaudit-kpi-delta local_courseaudit-delta-' . $delta['tone'] . '" title="'
+                    . $esc($comparelabel) . '">' . $esc($delta['text']) . '</div>'
+                    . ($spark !== '' ? '<div class="local_courseaudit-kpi-spark">' . $spark . '</div>' : '')
+                    . '</div>';
+            }
+            $html .= '</div></div>';
         }
         return $html . '</div>';
     }

@@ -81,4 +81,50 @@ class dashboard_charts {
 
         return $chart;
     }
+
+    /** @var string[] Bar colours by status, matching the KPI cards. */
+    const STATUS_COLORS = ['good' => '#2E8B57', 'warn' => '#CBAE2D', 'poor' => '#C0392B', 'none' => '#9AA5B8'];
+
+    /**
+     * Where every compliance metric stands today: one bar per metric, coloured green/amber/red by
+     * the same thresholds as the KPI cards, so a glance shows which requirement is furthest behind.
+     *
+     * @param array $kpis As returned by trend_report::kpis().
+     * @param string[] $labels Translated name per metric key (decides which bars are drawn, in order).
+     * @param string $title
+     * @return \core\chart_bar|null Null when there is no snapshot yet.
+     */
+    public static function compliance_bar_chart(array $kpis, array $labels, string $title): ?\core\chart_bar {
+        $names = [];
+        $values = [];
+        $colors = [];
+        foreach ($labels as $key => $label) {
+            $value = $kpis['metrics'][$key]['value'] ?? null;
+            if ($value === null) {
+                continue;
+            }
+            $names[] = $label;
+            $values[] = (float) $value;
+            $colors[] = self::STATUS_COLORS[trend_view::status((float) $value)];
+        }
+        if (empty($values)) {
+            return null;
+        }
+
+        $chart = new \core\chart_bar();
+        $chart->set_title($title);
+        $chart->set_labels($names);
+        $series = new \core\chart_series(get_string('trend_yaxis_percent', 'local_courseaudit'), $values);
+        $series->set_color(self::BRAND_NEUTRAL);
+        $series->set_colors($colors);
+        $chart->add_series($series);
+        $chart->set_legend_options(['display' => false]);
+
+        $yaxis = $chart->get_yaxis(0, true);
+        $yaxis->set_min(0);
+        $yaxis->set_max(100);
+        $yaxis->set_label('%');
+
+        return $chart;
+    }
 }

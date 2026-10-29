@@ -340,13 +340,15 @@ $trenddaily = trend_report::daily_totals($trendrows);
 $trendbuckets = trend_report::bucket($trenddaily, $trendgrain);
 $kpis = trend_report::kpis($trenddaily);
 
+// The five requirements plus their average. "Reviewed" is a workflow measure, not a requirement,
+// so it lives in the summary line (X not reviewed) rather than as a compliance card.
 $kpilabels = [
     'overall' => get_string('kpi_overall', 'local_courseaudit'),
     'template' => get_string('kpi_template', 'local_courseaudit'),
     'attendance' => get_string('kpi_attendance', 'local_courseaudit'),
     'materials' => get_string('kpi_materials', 'local_courseaudit'),
+    'cats' => get_string('kpi_cats', 'local_courseaudit'),
     'feedback' => get_string('kpi_feedback', 'local_courseaudit'),
-    'reviewed' => get_string('kpi_reviewed', 'local_courseaudit'),
 ];
 $countlabels = [
     'courses' => get_string('trend_series_courses', 'local_courseaudit'),
@@ -357,18 +359,41 @@ $countlabels = [
 ];
 $trendchart = dashboard_charts::trend_count_chart($trendbuckets, $countlabels, get_string('trend_chart_title', 'local_courseaudit'));
 
+$barchart = $kpis !== null
+    ? dashboard_charts::compliance_bar_chart($kpis, $kpilabels, get_string('barchart_title', 'local_courseaudit'))
+    : null;
+
 if ($kpis !== null) {
     $compareday = $kpis['baselinegap'] ?? 7;
+    $captions = ['overall' => get_string('kpi_overall_caption', 'local_courseaudit')];
+    foreach ($kpis['metrics'] as $metrickey => $metric) {
+        if (($metric['count'] ?? null) !== null) {
+            $captions[$metrickey] = get_string($metrickey === 'feedback' ? 'kpi_countof_items' : 'kpi_countof', 'local_courseaudit',
+                (object) ['count' => number_format($metric['count']), 'total' => number_format($metric['total'])]);
+        }
+    }
     echo html_writer::tag('p',
         get_string('trend_asof', 'local_courseaudit', userdate(
             \DateTimeImmutable::createFromFormat('!Ymd', (string) $kpis['asof'], new \DateTimeZone('UTC'))->getTimestamp(),
-            get_string('strftimedatefullshort', 'core_langconfig'), 99, false)),
+            get_string('strftimedatefullshort', 'core_langconfig'), 99, false))
+        . ' &middot; ' . get_string('kpi_changevs', 'local_courseaudit', $compareday),
         ['class' => 'text-muted small mb-1']);
     echo trend_view::cards($kpis, $kpilabels, get_string('kpi_pts', 'local_courseaudit'),
-        get_string('kpi_vsprevious', 'local_courseaudit', $compareday));
+        get_string('kpi_vsprevious', 'local_courseaudit', $compareday), $captions);
 }
 
-echo html_writer::start_div('local_courseaudit-chartbox local_courseaudit-chartbox-wide mb-3');
+// Two charts side by side: where each requirement stands today (works from the first refresh) and
+// how the numbers moved over time (needs two dated snapshots).
+echo html_writer::start_div('row local_courseaudit-chartrow');
+if ($barchart) {
+    echo html_writer::start_div('col-lg-5 mb-3');
+    echo html_writer::start_div('local_courseaudit-chartbox h-100');
+    echo $OUTPUT->render_chart($barchart, false);
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+echo html_writer::start_div($barchart ? 'col-lg-7 mb-3' : 'col-12 mb-3');
+echo html_writer::start_div('local_courseaudit-chartbox h-100');
 echo html_writer::start_div('d-flex flex-wrap align-items-center justify-content-end mb-1 local_courseaudit-trend-controls');
 foreach ([trend_report::GRAIN_DAY => 'trend_grain_day', trend_report::GRAIN_WEEK => 'trend_grain_week'] as $grain => $stringkey) {
     echo html_writer::link(new moodle_url($pageurl, ['trendgrain' => $grain]), get_string($stringkey, 'local_courseaudit'),
@@ -388,6 +413,8 @@ if ($trendchart) {
 } else {
     echo $OUTPUT->notification(get_string('trend_none', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
 }
+echo html_writer::end_div();
+echo html_writer::end_div();
 echo html_writer::end_div();
 
 // "Needs attention": who to chase first. Schools use the snapshots (so they carry a week-on-week
