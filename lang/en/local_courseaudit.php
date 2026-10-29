@@ -254,3 +254,23 @@ $string['kpi_countof_items'] = '{$a->count} of {$a->total} items graded';
 $string['barchart_title'] = 'Where each requirement stands today';
 $string['trend_yaxis_percent'] = 'Courses meeting it (%)';
 $string['kpi_changevs'] = 'change shown is against {$a} days ago';
+
+// Filters.
+$string['filters_heading'] = 'Filter courses';
+$string['filters_advanced'] = 'Compliance and data checks';
+$string['filters_apply'] = 'Apply filters';
+$string['filters_quick'] = 'Quick filters';
+$string['filters_active'] = 'Applied';
+$string['filters_remove'] = 'Remove filter: {$a}';
+$string['filters_scope_note'] = 'Category and School also drive the cards and graphs above. Every other filter narrows the course table and the export only.';
+$string['fl_compliance'] = 'Overall';
+$string['fl_timetable'] = 'Timetable match';
+$string['fl_minstudents'] = 'Minimum students';
+$string['opt_any'] = 'Any';
+$string['opt_gaps'] = 'Has gaps';
+$string['opt_compliant'] = 'Fully compliant';
+$string['opt_matched'] = 'Matched';
+$string['opt_unmatched'] = 'No timetable match';
+$string['opt_fb_none'] = 'None graded';
+$string['opt_fb_some'] = 'Some graded';
+$string['opt_fb_all'] = 'All graded';

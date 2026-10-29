@@ -44,7 +44,55 @@ class dashboard_filters {
             'search' => trim(optional_param('search', '', PARAM_TEXT)),
             'mlcourserisk' => optional_param('mlcourserisk', '', PARAM_ALPHA),
             'mlstudentrisk' => optional_param('mlstudentrisk', '', PARAM_ALPHA),
+            // Compliance and data checks. Each takes one of a fixed set of values, anything else is ignored.
+            'template' => self::choice('template', ['yes', 'no']),
+            'attendance' => self::choice('attendance', ['yes', 'no']),
+            'materials' => self::choice('materials', ['yes', 'no']),
+            'cats' => self::choice('cats', ['yes', 'no']),
+            'feedback' => self::choice('feedback', ['none', 'some', 'all']),
+            'compliance' => self::choice('compliance', ['gaps', 'ok']),
+            'timetable' => self::choice('timetable', ['matched', 'unmatched']),
+            'minstudents' => max(0, optional_param('minstudents', 0, PARAM_INT)),
         ];
+    }
+
+    /** @var string[] Every filter key, in the order they are shown and carried through URLs. */
+    const KEYS = ['categoryid', 'school', 'programlevel', 'reviewedfilter', 'needsclassification', 'search',
+        'mlcourserisk', 'mlstudentrisk', 'template', 'attendance', 'materials', 'cats', 'feedback', 'compliance',
+        'timetable', 'minstudents'];
+
+    /**
+     * Reads one request param that may only hold one of a fixed set of values.
+     *
+     * @param string $name
+     * @param string[] $allowed
+     * @return string The value, or '' if absent or not allowed.
+     */
+    protected static function choice(string $name, array $allowed): string {
+        $value = optional_param($name, '', PARAM_ALPHA);
+        return in_array($value, $allowed, true) ? $value : '';
+    }
+
+    /**
+     * The filters as URL parameters: only the ones that are set, so links stay short and a filter
+     * left at "any" never shows up in a URL.
+     *
+     * @param array $filters As returned by from_request().
+     * @param string[] $without Filter keys to leave out (used to build each "remove this filter" link).
+     * @return array
+     */
+    public static function to_params(array $filters, array $without = []): array {
+        $params = [];
+        foreach (self::KEYS as $key) {
+            if (in_array($key, $without, true)) {
+                continue;
+            }
+            $value = $filters[$key] ?? '';
+            if ($value !== '' && $value !== 0 && $value !== null) {
+                $params[$key] = $value;
+            }
+        }
+        return $params;
     }
 
     /**
@@ -53,9 +101,7 @@ class dashboard_filters {
      *              account for separately) is actually narrowing the result set.
      */
     public static function any_active(array $filters): bool {
-        $keys = ['categoryid', 'school', 'programlevel', 'reviewedfilter', 'needsclassification', 'search',
-            'mlcourserisk', 'mlstudentrisk'];
-        foreach ($keys as $key) {
+        foreach (self::KEYS as $key) {
             if (!empty($filters[$key])) {
                 return true;
             }
@@ -119,6 +165,57 @@ class dashboard_filters {
             $params['search2'] = $searchparam;
             $params['search3'] = $searchparam;
             $params['search4'] = $searchparam;
+        }
+
+        // Compliance and data checks. "Yes" means the requirement is met, using the same rules as the
+        // KPI cards and trend snapshots (trend_snapshot::row_flags), so a filtered list always agrees
+        // with the numbers on the cards.
+        // Each requirement as a [met, not met] pair of explicit conditions - written out rather than
+        // negated with NOT, so rows where the column is NULL are handled the same on every database.
+        $checks = [
+            'template' => ["a.templatedeployed = 'Yes'", "(a.templatedeployed IS NULL OR a.templatedeployed <> 'Yes')"],
+            'attendance' => ["a.attendancelink = 'Yes'", "(a.attendancelink IS NULL OR a.attendancelink <> 'Yes')"],
+            'materials' => [
+                "(a.materialsweeks IS NOT NULL AND a.materialsweeks <> '' AND a.materialsweeks <> '0')",
+                "(a.materialsweeks IS NULL OR a.materialsweeks = '' OR a.materialsweeks = '0')",
+            ],
+            'cats' => [
+                "(a.numcatsquizzes IS NOT NULL AND a.numcatsquizzes <> '' AND a.numcatsquizzes <> 'None')",
+                "(a.numcatsquizzes IS NULL OR a.numcatsquizzes = '' OR a.numcatsquizzes = 'None')",
+            ],
+        ];
+        foreach ($checks as $key => [$met, $notmet]) {
+            if (($filters[$key] ?? '') === 'yes') {
+                $where[] = $met;
+            } else if (($filters[$key] ?? '') === 'no') {
+                $where[] = $notmet;
+            }
+        }
+        if (($filters['compliance'] ?? '') === 'ok') {
+            $where[] = '(' . implode(' AND ', array_column($checks, 0)) . ')';
+        } else if (($filters['compliance'] ?? '') === 'gaps') {
+            $where[] = '(' . implode(' OR ', array_column($checks, 1)) . ')';
+        }
+        if (($filters['feedback'] ?? '') !== '') {
+            // A feedback item counts when it holds a percentage above 0 ("67%"); "No", "0%" and blank do not.
+            $items = [];
+            foreach (['assign1feedback', 'assign2feedback', 'assign3feedback', 'cat1feedback', 'cat2feedback'] as $i => $column) {
+                $param = 'fbpct' . $i;
+                $params[$param] = '%' . $DB->sql_like_escape('%');
+                $items[] = "CASE WHEN a.$column IS NOT NULL AND a.$column <> '0%' AND " .
+                    $DB->sql_like("a.$column", ":$param", false) . " THEN 1 ELSE 0 END";
+            }
+            $graded = '(' . implode(' + ', $items) . ')';
+            $where[] = ['none' => "$graded = 0", 'some' => "($graded > 0 AND $graded < 5)", 'all' => "$graded = 5"][$filters['feedback']];
+        }
+        if (($filters['timetable'] ?? '') === 'matched') {
+            $where[] = 'a.hastimetablematch = 1';
+        } else if (($filters['timetable'] ?? '') === 'unmatched') {
+            $where[] = 'a.hastimetablematch = 0';
+        }
+        if ((int) ($filters['minstudents'] ?? 0) > 0) {
+            $where[] = 'a.numstudents >= :minstudents';
+            $params['minstudents'] = (int) $filters['minstudents'];
         }
 
         // ML Backend risk filters - the flagged/at-risk course ids come from a completely

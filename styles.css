@@ -103,3 +103,19 @@ body.path-local-courseaudit #page.drawers {
 .local_courseaudit-morefilters summary { cursor: pointer; list-style: none; }
 .local_courseaudit-morefilters[open] { display: inline-flex; align-items: center; }
 .local_courseaudit-pill-warn, .local_courseaudit-pill-good, .local_courseaudit-pill-poor { font-weight: 600; }
+
+/* Filters: a card at the top of the page, visible labels, large enough targets. */
+.local_courseaudit-filters {
+    background: #fff;
+    border: 1px solid #dde2ea;
+    border-radius: 10px;
+    padding: 14px 16px 12px;
+}
+.local_courseaudit-fieldlabel { display: block; font-size: 0.8rem; font-weight: 600; color: #3b4659; margin-bottom: 2px; }
+.local_courseaudit-filters select, .local_courseaudit-filters input[type="search"],
+.local_courseaudit-filters input[type="number"] { min-height: 38px; }
+.local_courseaudit-advanced summary { cursor: pointer; font-weight: 600; color: #192C57; padding: 4px 0; }
+.local_courseaudit-advanced summary:focus-visible, .local_courseaudit-filters a:focus-visible,
+.local_courseaudit-filters select:focus-visible, .local_courseaudit-filters input:focus-visible { outline: 3px solid #CBAE2D; outline-offset: 2px; }
+.local_courseaudit-chip { font-weight: 500; text-decoration: none; padding: 6px 10px; }
+.local_courseaudit-chip:hover { text-decoration: none; opacity: 0.85; }

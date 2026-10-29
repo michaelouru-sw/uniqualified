@@ -75,15 +75,7 @@ $search = $filters['search'];
 $mlcourserisk = $filters['mlcourserisk'];
 $mlstudentrisk = $filters['mlstudentrisk'];
 
-$pageurl = new moodle_url('/local/courseaudit/index.php', [
-    'categoryid' => $categoryid,
-    'school' => $school,
-    'programlevel' => $programlevel,
-    'reviewedfilter' => $reviewedfilter,
-    'needsclassification' => $needsclassificationfilter,
-    'search' => $search,
-    'mlcourserisk' => $mlcourserisk,
-    'mlstudentrisk' => $mlstudentrisk,
+$pageurl = new moodle_url('/local/courseaudit/index.php', dashboard_filters::to_params($filters) + [
     'trendgrain' => $trendgrain,
     'trendweeks' => $trendweeks,
 ]);
@@ -264,11 +256,8 @@ if ($canmanage) {
     echo html_writer::link(new moodle_url($pageurl, ['action' => 'refresh', 'sesskey' => sesskey()]),
         get_string('refresh', 'local_courseaudit'), ['class' => 'btn btn-outline-secondary mr-2 me-2']);
     // Carries every applied filter through, so Export always matches what is on screen.
-    echo html_writer::link(new moodle_url('/local/courseaudit/export.php', [
-        'categoryid' => $categoryid, 'school' => $school, 'programlevel' => $programlevel,
-        'reviewedfilter' => $reviewedfilter, 'needsclassification' => $needsclassificationfilter, 'search' => $search,
-        'mlcourserisk' => $mlcourserisk, 'mlstudentrisk' => $mlstudentrisk,
-    ]), get_string('export', 'local_courseaudit'), ['class' => 'btn btn-primary mr-2 me-2']);
+    echo html_writer::link(new moodle_url('/local/courseaudit/export.php', dashboard_filters::to_params($filters)),
+        get_string('export', 'local_courseaudit'), ['class' => 'btn btn-primary mr-2 me-2']);
 
     $menuitems = [
         html_writer::link(new moodle_url('/local/courseaudit/import.php'), get_string('importtimetable', 'local_courseaudit'),
@@ -330,6 +319,185 @@ if ($mlavailable && $mlstudentriskcount > 0) {
         get_string('mlstudentriskcount', 'local_courseaudit', number_format($mlstudentriskcount)), ['class' => 'text-danger']);
 }
 echo html_writer::tag('p', implode(' &nbsp;&middot;&nbsp; ', $todo), ['class' => 'local_courseaudit-summaryline mb-3']);
+
+// ---------------------------------------------------------------------------------------------
+// Filters, at the top of the page: they decide everything below, so they come first.
+// Visible labels (not placeholders) on every control, one tab stop per control, and the
+// dropdowns apply on change so a keyboard or touch user needs one action per filter, not two.
+// ---------------------------------------------------------------------------------------------
+$yesno = ['' => get_string('opt_any', 'local_courseaudit'), 'yes' => get_string('yes'), 'no' => get_string('no')];
+$mlstatus = [
+    '' => get_string('anystatus', 'local_courseaudit'),
+    'yes' => get_string('mlatrisk', 'local_courseaudit'),
+    'no' => get_string('mlnotflagged', 'local_courseaudit'),
+];
+$feedbackoptions = [
+    '' => get_string('opt_any', 'local_courseaudit'),
+    'none' => get_string('opt_fb_none', 'local_courseaudit'),
+    'some' => get_string('opt_fb_some', 'local_courseaudit'),
+    'all' => get_string('opt_fb_all', 'local_courseaudit'),
+];
+$complianceoptions = [
+    '' => get_string('opt_any', 'local_courseaudit'),
+    'gaps' => get_string('opt_gaps', 'local_courseaudit'),
+    'ok' => get_string('opt_compliant', 'local_courseaudit'),
+];
+$timetableoptions = [
+    '' => get_string('opt_any', 'local_courseaudit'),
+    'matched' => get_string('opt_matched', 'local_courseaudit'),
+    'unmatched' => get_string('opt_unmatched', 'local_courseaudit'),
+];
+$reviewedoptions = [
+    '' => get_string('anystatus', 'local_courseaudit'),
+    'yes' => get_string('reviewed', 'local_courseaudit'),
+    'no' => get_string('notreviewed', 'local_courseaudit'),
+];
+$classifiedoptions = [
+    '' => get_string('anystatus', 'local_courseaudit'),
+    'yes' => get_string('needsclassification', 'local_courseaudit'),
+    'no' => get_string('classified', 'local_courseaudit'),
+];
+$schooloptions = ['' => get_string('allschools', 'local_courseaudit')];
+foreach ($schools as $schoolname) {
+    $schooloptions[$schoolname] = $schoolname;
+}
+$leveloptions = ['' => get_string('alllevels', 'local_courseaudit')];
+foreach (program_mapper::LEVELS as $level) {
+    $leveloptions[$level] = $level;
+}
+
+/** One labelled control: the label is always visible and tied to its field. */
+$field = static function (string $id, string $label, string $control, string $class = 'col-sm-6 col-lg-3'): string {
+    return html_writer::div(html_writer::tag('label', $label, ['for' => $id, 'class' => 'local_courseaudit-fieldlabel'])
+        . $control, $class . ' mb-2');
+};
+$select = static function (string $name, array $options, $selected) {
+    return html_writer::select($options, $name, $selected, null,
+        ['id' => 'id_' . $name, 'class' => 'custom-select form-select w-100', 'onchange' => 'this.form.submit()']);
+};
+
+$advancedactive = false;
+foreach (['template', 'attendance', 'materials', 'cats', 'feedback', 'compliance', 'timetable', 'minstudents',
+        'needsclassification', 'mlcourserisk', 'mlstudentrisk'] as $advancedkey) {
+    if (!empty($filters[$advancedkey])) {
+        $advancedactive = true;
+    }
+}
+
+echo html_writer::start_tag('form', ['method' => 'get', 'action' => $pageurl->out_omit_querystring(), 'role' => 'search',
+    'aria-label' => get_string('filters_heading', 'local_courseaudit'), 'class' => 'local_courseaudit-filters mb-3']);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendgrain', 'value' => $trendgrain]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendweeks', 'value' => $trendweeks]);
+
+echo html_writer::tag('h2', get_string('filters_heading', 'local_courseaudit'), ['class' => 'h5 mb-2']);
+echo html_writer::start_div('row');
+echo $field('id_search', get_string('filtersearch', 'local_courseaudit'), html_writer::empty_tag('input', [
+    'type' => 'search', 'name' => 'search', 'id' => 'id_search', 'value' => $search, 'class' => 'form-control w-100',
+    'placeholder' => get_string('filtersearch_placeholder', 'local_courseaudit')]), 'col-12 col-lg-3');
+echo $field('id_categoryid', get_string('filtercategory', 'local_courseaudit'),
+    $select('categoryid', [0 => get_string('allcategories', 'local_courseaudit')] + $categories, $categoryid), 'col-sm-6 col-lg-3');
+echo $field('id_school', get_string('filterschool', 'local_courseaudit'), $select('school', $schooloptions, $school), 'col-sm-6 col-lg-2');
+echo $field('id_programlevel', get_string('filterprogramlevel', 'local_courseaudit'),
+    $select('programlevel', $leveloptions, $programlevel), 'col-sm-6 col-lg-2');
+echo $field('id_reviewedfilter', get_string('filterreviewed', 'local_courseaudit'),
+    $select('reviewedfilter', $reviewedoptions, $reviewedfilter), 'col-sm-6 col-lg-2');
+echo html_writer::end_div();
+
+// Compliance and data checks: the questions people actually ask ("which courses have no attendance
+// link?", "who has no timetable match?"), kept in one group that opens by itself when any is in use.
+echo html_writer::start_tag('details', ['class' => 'local_courseaudit-advanced mb-2'] + ($advancedactive ? ['open' => 'open'] : []));
+echo html_writer::tag('summary', get_string('filters_advanced', 'local_courseaudit'));
+echo html_writer::start_div('row pt-2');
+echo $field('id_compliance', get_string('fl_compliance', 'local_courseaudit'), $select('compliance', $complianceoptions, $filters['compliance']));
+echo $field('id_template', get_string('kpi_template', 'local_courseaudit'), $select('template', $yesno, $filters['template']));
+echo $field('id_attendance', get_string('kpi_attendance', 'local_courseaudit'), $select('attendance', $yesno, $filters['attendance']));
+echo $field('id_materials', get_string('kpi_materials', 'local_courseaudit'), $select('materials', $yesno, $filters['materials']));
+echo $field('id_cats', get_string('kpi_cats', 'local_courseaudit'), $select('cats', $yesno, $filters['cats']));
+echo $field('id_feedback', get_string('kpi_feedback', 'local_courseaudit'), $select('feedback', $feedbackoptions, $filters['feedback']));
+echo $field('id_timetable', get_string('fl_timetable', 'local_courseaudit'), $select('timetable', $timetableoptions, $filters['timetable']));
+echo $field('id_needsclassification', get_string('filterneedsclassification', 'local_courseaudit'),
+    $select('needsclassification', $classifiedoptions, $needsclassificationfilter));
+echo $field('id_minstudents', get_string('fl_minstudents', 'local_courseaudit'), html_writer::empty_tag('input', [
+    'type' => 'number', 'name' => 'minstudents', 'id' => 'id_minstudents', 'min' => 0, 'step' => 1, 'class' => 'form-control w-100',
+    'value' => $filters['minstudents'] ?: '', 'placeholder' => '0']));
+if ($mlavailable) {
+    echo $field('id_mlcourserisk', get_string('filtermlcourserisk', 'local_courseaudit'), $select('mlcourserisk', $mlstatus, $mlcourserisk));
+    echo $field('id_mlstudentrisk', get_string('filtermlstudentrisk', 'local_courseaudit'), $select('mlstudentrisk', $mlstatus, $mlstudentrisk));
+}
+echo html_writer::end_div();
+echo html_writer::end_tag('details');
+
+echo html_writer::start_div('d-flex flex-wrap align-items-center');
+echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('filters_apply', 'local_courseaudit'),
+    'class' => 'btn btn-primary mr-2 me-2']);
+if (dashboard_filters::any_active($filters)) {
+    echo html_writer::link($dashboardurl, get_string('resetfilters', 'local_courseaudit'), ['class' => 'btn btn-link']);
+}
+echo html_writer::end_div();
+echo html_writer::end_tag('form');
+
+// Quick filters: one click for the four things people check most. Clicking an active one turns it off.
+$quick = [
+    ['compliance', 'gaps', get_string('opt_gaps', 'local_courseaudit')],
+    ['reviewedfilter', 'no', get_string('notreviewed', 'local_courseaudit')],
+    ['timetable', 'unmatched', get_string('opt_unmatched', 'local_courseaudit')],
+    ['needsclassification', 'yes', get_string('needsclassification', 'local_courseaudit')],
+];
+echo html_writer::start_div('d-flex flex-wrap align-items-center mb-2');
+echo html_writer::tag('span', get_string('filters_quick', 'local_courseaudit') . ':', ['class' => 'text-muted small mr-2 me-2']);
+foreach ($quick as [$qkey, $qvalue, $qlabel]) {
+    $isactive = ($filters[$qkey] ?? '') === $qvalue;
+    $qurl = new moodle_url($dashboardurl, $isactive
+        ? dashboard_filters::to_params($filters, [$qkey]) : [$qkey => $qvalue] + dashboard_filters::to_params($filters, [$qkey]));
+    echo html_writer::link($qurl, $qlabel, ['class' => 'btn btn-sm mr-2 me-2 mb-1 ' . ($isactive ? 'btn-primary' : 'btn-outline-secondary'),
+        'aria-pressed' => $isactive ? 'true' : 'false']);
+}
+echo html_writer::end_div();
+
+// What is currently applied, each with its own remove link - so it is never a mystery why a list is short.
+$chiptexts = [];
+$chipvalue = static function (string $key) use ($filters, $categories, $yesno, $reviewedoptions, $classifiedoptions, $feedbackoptions,
+        $complianceoptions, $timetableoptions, $mlstatus): string {
+    $value = $filters[$key];
+    $maps = ['reviewedfilter' => $reviewedoptions, 'needsclassification' => $classifiedoptions, 'feedback' => $feedbackoptions,
+        'compliance' => $complianceoptions, 'timetable' => $timetableoptions, 'mlcourserisk' => $mlstatus, 'mlstudentrisk' => $mlstatus,
+        'template' => $yesno, 'attendance' => $yesno, 'materials' => $yesno, 'cats' => $yesno];
+    if ($key === 'categoryid') {
+        return (string) ($categories[$value] ?? $value);
+    }
+    if ($key === 'minstudents') {
+        return '&ge; ' . (int) $value;
+    }
+    return isset($maps[$key]) ? (string) ($maps[$key][$value] ?? $value) : (string) $value;
+};
+$chiplabels = [
+    'categoryid' => get_string('filtercategory', 'local_courseaudit'), 'school' => get_string('filterschool', 'local_courseaudit'),
+    'programlevel' => get_string('filterprogramlevel', 'local_courseaudit'), 'reviewedfilter' => get_string('filterreviewed', 'local_courseaudit'),
+    'needsclassification' => get_string('filterneedsclassification', 'local_courseaudit'), 'search' => get_string('filtersearch', 'local_courseaudit'),
+    'mlcourserisk' => get_string('filtermlcourserisk', 'local_courseaudit'), 'mlstudentrisk' => get_string('filtermlstudentrisk', 'local_courseaudit'),
+    'template' => get_string('kpi_template', 'local_courseaudit'), 'attendance' => get_string('kpi_attendance', 'local_courseaudit'),
+    'materials' => get_string('kpi_materials', 'local_courseaudit'), 'cats' => get_string('kpi_cats', 'local_courseaudit'),
+    'feedback' => get_string('kpi_feedback', 'local_courseaudit'), 'compliance' => get_string('fl_compliance', 'local_courseaudit'),
+    'timetable' => get_string('fl_timetable', 'local_courseaudit'), 'minstudents' => get_string('fl_minstudents', 'local_courseaudit'),
+];
+$activechips = [];
+foreach (dashboard_filters::KEYS as $chipkey) {
+    if (empty($filters[$chipkey])) {
+        continue;
+    }
+    $text = s($chiplabels[$chipkey]) . ': ' . ($chipkey === 'minstudents' ? $chipvalue($chipkey) : s($chipvalue($chipkey)));
+    $activechips[] = html_writer::link(new moodle_url($dashboardurl, dashboard_filters::to_params($filters, [$chipkey])),
+        $text . ' <span aria-hidden="true">&times;</span>',
+        ['class' => 'badge badge-pill rounded-pill badge-secondary bg-secondary local_courseaudit-chip mr-1 me-1',
+         'title' => get_string('filters_remove', 'local_courseaudit', strip_tags($text)),
+         'aria-label' => get_string('filters_remove', 'local_courseaudit', strip_tags($text))]);
+}
+if ($activechips) {
+    echo html_writer::tag('p', html_writer::tag('span', get_string('filters_active', 'local_courseaudit') . ': ', ['class' => 'text-muted small mr-1 me-1'])
+        . implode(' ', $activechips), ['class' => 'mb-2']);
+}
+echo html_writer::tag('p', get_string('filters_scope_note', 'local_courseaudit'), ['class' => 'text-muted small mb-3']);
+
 
 // KPI cards and the compliance line graph. Both read the daily snapshots (see trend_snapshot), so
 // they follow the Category and School filters only - a snapshot can't be re-filtered by a search
@@ -501,70 +669,12 @@ if ($attentionschools['lowest'] || $attentionlecturers) {
     echo html_writer::end_div();
 }
 
-// Filters: the five that matter inline, the rest tucked under "More filters".
-echo html_writer::start_tag('form', ['method' => 'get', 'action' => $pageurl->out_omit_querystring(), 'class' => 'form-inline mb-2']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendgrain', 'value' => $trendgrain]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendweeks', 'value' => $trendweeks]);
-
-echo html_writer::empty_tag('input', ['type' => 'text', 'name' => 'search', 'id' => 'id_search', 'value' => s($search),
-    'placeholder' => get_string('filtersearch_placeholder', 'local_courseaudit'), 'class' => 'mr-2 me-2 form-control',
-    'size' => 26, 'aria-label' => get_string('filtersearch', 'local_courseaudit')]);
-echo html_writer::select([0 => get_string('allcategories', 'local_courseaudit')] + $categories, 'categoryid', $categoryid, null,
-    ['class' => 'mr-2 me-2', 'id' => 'id_categoryid', 'aria-label' => get_string('filtercategory', 'local_courseaudit')]);
-$schooloptions = ['' => get_string('allschools', 'local_courseaudit')];
-foreach ($schools as $s) {
-    $schooloptions[$s] = $s;
-}
-echo html_writer::select($schooloptions, 'school', $school, null,
-    ['class' => 'mr-2 me-2', 'id' => 'id_school', 'aria-label' => get_string('filterschool', 'local_courseaudit')]);
-$programleveloptions = ['' => get_string('alllevels', 'local_courseaudit')];
-foreach (program_mapper::LEVELS as $level) {
-    $programleveloptions[$level] = $level;
-}
-echo html_writer::select($programleveloptions, 'programlevel', $programlevel, null,
-    ['class' => 'mr-2 me-2', 'id' => 'id_programlevel', 'aria-label' => get_string('filterprogramlevel', 'local_courseaudit')]);
-echo html_writer::select([
-    '' => get_string('anystatus', 'local_courseaudit'),
-    'yes' => get_string('reviewed', 'local_courseaudit'),
-    'no' => get_string('notreviewed', 'local_courseaudit'),
-], 'reviewedfilter', $reviewedfilter, null,
-    ['class' => 'mr-2 me-2', 'id' => 'id_reviewedfilter', 'aria-label' => get_string('filterreviewed', 'local_courseaudit')]);
-
-// Secondary filters stay open if one is already applied, so an active filter is never hidden.
-$morefiltersopen = $needsclassificationfilter !== '' || $mlcourserisk !== '' || $mlstudentrisk !== '';
-echo html_writer::start_tag('details', ['class' => 'mr-2 me-2 local_courseaudit-morefilters'] + ($morefiltersopen ? ['open' => 'open'] : []));
-echo html_writer::tag('summary', get_string('morefilters', 'local_courseaudit'), ['class' => 'btn btn-link p-0']);
-echo html_writer::select([
-    '' => get_string('anystatus', 'local_courseaudit'),
-    'yes' => get_string('needsclassification', 'local_courseaudit'),
-    'no' => get_string('classified', 'local_courseaudit'),
-], 'needsclassification', $needsclassificationfilter, null,
-    ['class' => 'ml-2 ms-2', 'id' => 'id_needsclassification', 'aria-label' => get_string('filterneedsclassification', 'local_courseaudit')]);
-if ($mlavailable) {
-    $mloptions = [
-        '' => get_string('anystatus', 'local_courseaudit'),
-        'yes' => get_string('mlatrisk', 'local_courseaudit'),
-        'no' => get_string('mlnotflagged', 'local_courseaudit'),
-    ];
-    echo html_writer::select($mloptions, 'mlcourserisk', $mlcourserisk, null,
-        ['class' => 'ml-2 ms-2', 'id' => 'id_mlcourserisk', 'aria-label' => get_string('filtermlcourserisk', 'local_courseaudit')]);
-    echo html_writer::select($mloptions, 'mlstudentrisk', $mlstudentrisk, null,
-        ['class' => 'ml-2 ms-2', 'id' => 'id_mlstudentrisk', 'aria-label' => get_string('filtermlstudentrisk', 'local_courseaudit')]);
-}
-echo html_writer::end_tag('details');
-
-echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('filter'), 'class' => 'btn btn-secondary mr-2 me-2']);
-if (dashboard_filters::any_active($filters)) {
-    echo html_writer::link($dashboardurl, get_string('resetfilters', 'local_courseaudit'), ['class' => 'btn btn-link']);
-}
-echo html_writer::end_tag('form');
-
 echo html_writer::tag('p', get_string('filteredcount', 'local_courseaudit', (object) [
     'filtered' => $filteredcount, 'total' => $totalcount,
 ]), ['class' => 'text-muted small mb-2']);
 
 // Compliance cell helpers: a coloured pill reads faster down a column than the words "Yes"/"No".
-$yesno = static function (?string $value): string {
+$yesnopill = static function (?string $value): string {
     if ($value === 'Yes') {
         return html_writer::tag('span', get_string('yes'), ['class' => 'badge local_courseaudit-pill-good']);
     }
@@ -661,8 +771,8 @@ if ($filteredcount === 0) {
             s($row->school ?: '-'),
             s($row->lecturername ?: '-'),
             $row->numstudents ?? '-',
-            $yesno($row->templatedeployed),
-            $yesno($row->attendancelink),
+            $yesnopill($row->templatedeployed),
+            $yesnopill($row->attendancelink),
             $materialscell,
             $catscell,
             $feedbackcell,
