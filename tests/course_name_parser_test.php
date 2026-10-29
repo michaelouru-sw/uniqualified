@@ -76,6 +76,50 @@ final class course_name_parser_test extends \basic_testcase {
         $this->assertNull($result['lecturername']);
     }
 
+    public function test_parse_fullname_with_term_prefix(): void {
+        $result = course_name_parser::parse_fullname(
+            'TRIM3 26:CSL 4102:COUNSELING IN THE WORKPLACE:PTDL:VIVIAN ARANGO ACHIENG:ZOOM:Stream A'
+        );
+        $this->assertTrue($result['matched']);
+        $this->assertSame('TRIM3 26', $result['term']);
+        $this->assertSame('CSL 4102', $result['unitcode']);
+        $this->assertSame('COUNSELING IN THE WORKPLACE', $result['unitname']);
+        $this->assertSame('PTDL', $result['modeofstudy']);
+        $this->assertSame('VIVIAN ARANGO ACHIENG', $result['lecturername']);
+        $this->assertSame('ZOOM', $result['location']);
+        $this->assertSame('Stream A', $result['stream']);
+    }
+
+    public function test_parse_fullname_with_numbered_term_prefix_and_campus(): void {
+        $result = course_name_parser::parse_fullname(
+            '01_TRIM3 26:MAT 106:BUSINESS MATHEMATICS:FT:MAIN:GEORGE WANJANGI WAMAI:4-1:Stream A'
+        );
+        $this->assertSame('01_TRIM3 26', $result['term']);
+        $this->assertSame('MAT 106', $result['unitcode']);
+        $this->assertSame('FT', $result['modeofstudy']);
+        $this->assertSame('MAIN', $result['campus']);
+        $this->assertSame('GEORGE WANJANGI WAMAI', $result['lecturername']);
+        $this->assertSame('4-1', $result['location']);
+        $this->assertSame('Stream A', $result['stream']);
+    }
+
+    public function test_parse_fullname_with_empty_mode(): void {
+        $result = course_name_parser::parse_fullname(
+            'TRIM3 26:CSL 2102:COUNSELING CHILDREN, YOUTH AND ADULTS::VIVIAN ARANGO ACHIENG:ZOOM:Stream A'
+        );
+        $this->assertSame('CSL 2102', $result['unitcode']);
+        $this->assertNull($result['modeofstudy']);
+        $this->assertSame('VIVIAN ARANGO ACHIENG', $result['lecturername']);
+        $this->assertSame('ZOOM', $result['location']);
+        $this->assertFalse($result['matched']);
+    }
+
+    public function test_parse_fullname_without_prefix_has_no_term(): void {
+        $result = course_name_parser::parse_fullname('CSL 2202:BEHAVIOUR MODIFICATION:PTDL:MARGRET MURUGI NJIRU:ZOOM:Stream A');
+        $this->assertNull($result['term']);
+        $this->assertNull($result['campus']);
+    }
+
     public function test_parse_fullname_empty_string(): void {
         $result = course_name_parser::parse_fullname('');
         $this->assertFalse($result['matched']);

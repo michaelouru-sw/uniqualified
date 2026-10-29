@@ -40,16 +40,30 @@ namespace local_courseaudit;
  */
 class course_name_parser {
 
-    /** @var int Expected number of colon-delimited segments. */
+    /** @var int Expected number of colon-delimited segments (after any term prefix is removed). */
     const EXPECTED_SEGMENTS = 6;
+
+    /** @var string Pattern a segment must match to be recognised as a unit code, e.g. "CSL 2202", "BBIT 04104". */
+    const UNITCODE_PATTERN = '/^[A-Za-z]{2,6}\s?\d{3,5}$/';
+
+    /** @var string[] Campus labels that may appear as an extra segment between Mode and Lecturer. */
+    const CAMPUS_LABELS = ['MAIN', 'TOWN', 'KSM', 'KITENGELA', 'KISUMU', 'NAIROBI'];
 
     /**
      * Parses a course fullname into its component fields.
      *
      * @param string $fullname
+     * Also tolerates the variants now seen on the LMS:
+     *  - a leading term segment, e.g. "TRIM3 26:" or "01_TRIM3 26:" (returned as 'term' and
+     *    otherwise ignored, so it can no longer be mistaken for the unit code);
+     *  - an extra campus segment between Mode and Lecturer, e.g.
+     *    "ACC 1201:FINANCIAL ACCOUNTING II:FT:MAIN:MARGARET NJERI KARUITHA:LT 2-4:Stream B"
+     *    (returned as 'campus');
+     *  - an empty Mode segment ("::").
+     *
      * @return array{unitcode: ?string, unitname: ?string, modeofstudy: ?string,
      *               lecturername: ?string, location: ?string, stream: ?string,
-     *               matched: bool}
+     *               term: ?string, campus: ?string, matched: bool}
      *         'matched' is true only when all six segments were present; a partial
      *         match (e.g. missing stream) still returns whatever fields it found,
      *         with 'matched' false so callers know to treat it cautiously.
@@ -62,6 +76,8 @@ class course_name_parser {
             'lecturername' => null,
             'location' => null,
             'stream' => null,
+            'term' => null,
+            'campus' => null,
             'matched' => false,
         ];
 
@@ -69,8 +85,30 @@ class course_name_parser {
             return $result;
         }
 
-        $segments = array_map('trim', explode(':', $fullname, self::EXPECTED_SEGMENTS));
-        $keys = ['unitcode', 'unitname', 'modeofstudy', 'lecturername', 'location', 'stream'];
+        $segments = explode(':', $fullname);
+
+        // Leading term segment ("TRIM3 26", "01_TRIM3 26"): present when the first segment is not
+        // itself a unit code but the second one is. Without this the whole record shifts by one.
+        if (count($segments) > 1 && !self::looks_like_unitcode($segments[0])
+                && self::looks_like_unitcode($segments[1])) {
+            $result['term'] = trim($segments[0]) !== '' ? trim($segments[0]) : null;
+            array_shift($segments);
+        }
+
+        // Optional campus segment straight after Mode of Study (unit code, unit name, mode, CAMPUS, ...).
+        $hascampus = isset($segments[3]) && in_array(strtoupper(trim($segments[3])), self::CAMPUS_LABELS, true);
+        $keys = $hascampus
+            ? ['unitcode', 'unitname', 'modeofstudy', 'campus', 'lecturername', 'location', 'stream']
+            : ['unitcode', 'unitname', 'modeofstudy', 'lecturername', 'location', 'stream'];
+
+        // Cap the segment count so a stray colon in the trailing field (e.g. "Stream A: Evening")
+        // lands entirely in 'stream' rather than shifting the rest of the record.
+        $limit = count($keys);
+        if (count($segments) > $limit) {
+            $segments = array_merge(array_slice($segments, 0, $limit - 1),
+                [implode(':', array_slice($segments, $limit - 1))]);
+        }
+        $segments = array_map('trim', $segments);
 
         foreach ($keys as $i => $key) {
             if (isset($segments[$i]) && $segments[$i] !== '') {
@@ -82,9 +120,21 @@ class course_name_parser {
             $result['unitcode'] = timetable_parser::normalize_code($result['unitcode']);
         }
 
-        $result['matched'] = count($segments) === self::EXPECTED_SEGMENTS && !in_array('', $segments, true);
+        $required = ['unitcode', 'unitname', 'modeofstudy', 'lecturername', 'location', 'stream'];
+        $result['matched'] = count($segments) === $limit
+            && count(array_filter($required, fn($k) => $result[$k] === null)) === 0;
 
         return $result;
+    }
+
+    /**
+     * Whether a segment looks like a unit code ("CSL 2202", "MAT1102", "BBIT 04104").
+     *
+     * @param string $value
+     * @return bool
+     */
+    protected static function looks_like_unitcode(string $value): bool {
+        return preg_match(self::UNITCODE_PATTERN, trim($value)) === 1;
     }
 
     /**

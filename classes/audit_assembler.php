@@ -204,6 +204,14 @@ class audit_assembler {
         $programcode = $offering['programcode'] ?? null;
         $levelinfo = program_mapper::get_level($programcode);
 
+        // School (and programme) when no single offering could be picked: if every tied
+        // candidate belongs to the same school, that is still a known fact about the course.
+        $winners = $matcherresult['winners'] ?? [];
+        $school = $offering['institution'] ?? self::resolve_unanimous_value($winners, 'institution');
+        $programme = ($offering['programname'] ?? $offering['programcode'] ?? null)
+            ?? self::resolve_unanimous_value($winners, 'programname')
+            ?? self::resolve_unanimous_value($winners, 'programcode');
+
         $heuristicresult = heuristics::evaluate_course($course, $studentuserids);
 
         $needsclassification = false;
@@ -233,10 +241,10 @@ class audit_assembler {
         return [
             'unitcode' => $unitcode,
             'unitname' => $unitname,
-            'school' => $offering['institution'] ?? null,
+            'school' => $school,
             // The programme itself (e.g. "Bachelor of Commerce"), not the classified level -
             // falls back to the bare programme code if the timetable didn't carry a full name.
-            'programme' => $offering['programname'] ?? $offering['programcode'] ?? null,
+            'programme' => $programme,
             'numstudents' => $numstudents,
             'lecturername' => $lecturername,
             'timetablelecturer' => $timetablelecturer,
@@ -316,6 +324,30 @@ class audit_assembler {
         $record->timemodified = $now;
         $DB->insert_record('local_courseaudit_audit', $record);
         return 'created';
+    }
+
+    /**
+     * Returns the value of one field if every offering in the list carries the same non-empty
+     * value for it, otherwise null.
+     *
+     * @param array $offerings Offerings as returned by course_matcher (e.g. the tied 'winners').
+     * @param string $field Offering key, e.g. 'institution'.
+     * @return string|null
+     */
+    public static function resolve_unanimous_value(array $offerings, string $field): ?string {
+        $value = null;
+        foreach ($offerings as $offering) {
+            $current = trim((string) ($offering[$field] ?? ''));
+            if ($current === '') {
+                return null;
+            }
+            if ($value === null) {
+                $value = $current;
+            } else if (strcasecmp($value, $current) !== 0) {
+                return null;
+            }
+        }
+        return $value;
     }
 
     /**

@@ -264,35 +264,53 @@ class course_matcher {
 
         $namehints = course_name_parser::parse_fullname($course->fullname ?? '');
 
-        // This site's structured course fullname ("Unit Code:Unit Name:Mode:Lecturer:Location:Stream")
+        // This site's structured course fullname ("[Term:]Unit Code:Unit Name:Mode:Lecturer:Location:Stream")
         // is a far more direct signal than pattern-matching the shortname, so prefer it when present.
-        $unitcode = $namehints['unitcode'] ?? null;
-        if ($unitcode === null) {
-            $pattern = get_config('local_courseaudit', 'shortnameregex');
-            $unitcode = self::extract_unitcode($course->shortname ?? '', (string) $pattern);
+        // The shortname-derived code is kept as a fallback: if the fullname's code finds nothing in
+        // the timetable (a mis-typed name, or a convention variant the parser doesn't know), the
+        // shortname still gets a chance rather than the course silently going unmatched.
+        $candidates = [];
+        if (!empty($namehints['unitcode'])) {
+            $candidates[] = $namehints['unitcode'];
+        }
+        $pattern = get_config('local_courseaudit', 'shortnameregex');
+        $fromshortname = self::extract_unitcode($course->shortname ?? '', (string) $pattern);
+        if ($fromshortname !== null && !in_array($fromshortname, $candidates, true)) {
+            $candidates[] = $fromshortname;
         }
 
-        if ($unitcode === null) {
+        if (empty($candidates)) {
             return ['unitcode' => null, 'term' => $term, 'offerings' => [], 'selected' => null, 'ambiguous' => false,
                 'winners' => [], 'namehints' => $namehints];
         }
 
-        $unitcodekey = timetable_parser::normalize_matchkey($unitcode);
+        $requestedterm = $term;
+        $unitcode = $candidates[0];
+        $dbrows = [];
+        foreach ($candidates as $candidate) {
+            $unitcodekey = timetable_parser::normalize_matchkey($candidate);
+            $term = $requestedterm;
 
-        if ($term !== null) {
-            // Explicit term requested (e.g. a scoped refresh, or the dashboard's term filter) -
-            // respect it exactly, even if nothing matches.
-            $dbrows = $DB->get_records('local_courseaudit_timetable', ['unitcodekey' => $unitcodekey, 'term' => $term]);
-        } else {
-            // No term given: different schools' imports commonly use different term labels for
-            // what is really the same period (or the admin might import a corrected file under a
-            // fresh label rather than reusing the old one). Rather than assuming one single
-            // globally-latest term string covers every course, resolve "latest" per unit code:
-            // look at every term this unit code appears under, and use whichever one was
-            // imported most recently for *this* unit code specifically.
-            $allmatches = $DB->get_records('local_courseaudit_timetable', ['unitcodekey' => $unitcodekey]);
-            $term = self::resolve_latest_term(array_values($allmatches));
-            $dbrows = $term === null ? [] : array_filter($allmatches, fn($row) => $row->term === $term);
+            if ($term !== null) {
+                // Explicit term requested (e.g. a scoped refresh, or the dashboard's term filter) -
+                // respect it exactly, even if nothing matches.
+                $dbrows = $DB->get_records('local_courseaudit_timetable', ['unitcodekey' => $unitcodekey, 'term' => $term]);
+            } else {
+                // No term given: different schools' imports commonly use different term labels for
+                // what is really the same period (or the admin might import a corrected file under a
+                // fresh label rather than reusing the old one). Rather than assuming one single
+                // globally-latest term string covers every course, resolve "latest" per unit code:
+                // look at every term this unit code appears under, and use whichever one was
+                // imported most recently for *this* unit code specifically.
+                $allmatches = $DB->get_records('local_courseaudit_timetable', ['unitcodekey' => $unitcodekey]);
+                $term = self::resolve_latest_term(array_values($allmatches));
+                $dbrows = $term === null ? [] : array_filter($allmatches, fn($row) => $row->term === $term);
+            }
+
+            if (!empty($dbrows)) {
+                $unitcode = $candidate;
+                break;
+            }
         }
 
         if (empty($dbrows)) {
