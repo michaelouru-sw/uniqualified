@@ -182,4 +182,21 @@ final class trend_test extends \basic_testcase {
     public function test_kpis_without_snapshots_is_null(): void {
         $this->assertNull(trend_report::kpis([]));
     }
+
+    public function test_count_series_returns_course_counts_not_percentages(): void {
+        $buckets = trend_report::bucket(trend_report::daily_totals([
+            (object) ['snapday' => 20261001, 'courses' => 10, 'reviewed' => 0, 'templateyes' => 4, 'attendanceyes' => 2,
+                'materialsyes' => 6, 'catsyes' => 8],
+            (object) ['snapday' => 20261002, 'courses' => 12, 'reviewed' => 0, 'templateyes' => 9, 'attendanceyes' => 5,
+                'materialsyes' => 7, 'catsyes' => 11],
+        ]), trend_report::GRAIN_DAY);
+
+        $series = trend_report::count_series($buckets);
+
+        $this->assertSame([10, 12], $series['courses']);
+        $this->assertSame([4, 9], $series['template']);
+        $this->assertSame([2, 5], $series['attendance']);
+        $this->assertSame([6, 7], $series['materials']);
+        $this->assertSame([8, 11], $series['cats']);
+    }
 }

@@ -186,7 +186,7 @@ $string['privacy:metadata'] = 'The Uniqualified plugin stores lecturer names cop
 
 // Trends and KPI cards.
 $string['trend_heading'] = 'Trends';
-$string['trend_chart_title'] = 'Compliance over time (% of audited courses)';
+$string['trend_chart_title'] = 'Courses meeting each requirement, by date';
 $string['trend_grain'] = 'View by';
 $string['trend_grain_day'] = 'Day';
 $string['trend_grain_week'] = 'Week';
@@ -234,3 +234,16 @@ $string['atrisk_col_student'] = 'Student';
 $string['atrisk_col_lecturer'] = 'Lecturer';
 $string['atrisk_col_risk'] = 'Risk score';
 $string['atrisk_col_flagged'] = 'Flagged on';
+
+// Dashboard redesign.
+$string['more'] = 'More';
+$string['morefilters'] = 'More filters';
+$string['summary_audited'] = 'courses audited';
+$string['summary_unmatched'] = 'with no timetable match';
+$string['summary_unmatched_help'] = 'These courses could not be matched to a timetable row, so they have no School or Programme. Check the timetable import and the course names.';
+$string['col_unit'] = 'Unit';
+$string['col_feedback'] = 'Feedback';
+$string['trend_xaxis'] = 'Date';
+$string['trend_yaxis'] = 'Number of courses';
+$string['trend_series_courses'] = 'Courses audited';
+$string['trend_series_cats'] = 'CATs/quizzes posted';

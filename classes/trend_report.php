@@ -135,6 +135,32 @@ class trend_report {
         return array_values($buckets);
     }
 
+    /** @var array<string, string> Series key => snapshot column holding the number of courses meeting that requirement. */
+    const COUNT_COLUMNS = [
+        'courses' => 'courses',
+        'template' => 'templateyes',
+        'attendance' => 'attendanceyes',
+        'materials' => 'materialsyes',
+        'cats' => 'catsyes',
+    ];
+
+    /**
+     * Number of courses (not a percentage) per date: how many were audited and how many met each
+     * requirement, one value per bucket, for the dashboard's line graph.
+     *
+     * @param array[] $buckets As returned by bucket().
+     * @return array<string, int[]> Series key => values, aligned with the buckets.
+     */
+    public static function count_series(array $buckets): array {
+        $series = array_fill_keys(array_keys(self::COUNT_COLUMNS), []);
+        foreach ($buckets as $bucket) {
+            foreach (self::COUNT_COLUMNS as $key => $column) {
+                $series[$key][] = (int) ($bucket['totals'][$column] ?? 0);
+            }
+        }
+        return $series;
+    }
+
     /**
      * Headline numbers with change since about a week earlier, plus a sparkline series.
      *

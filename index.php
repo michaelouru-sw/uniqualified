@@ -245,117 +245,102 @@ $lastrefreshcompleted = get_config('local_courseaudit', 'lastrefreshcompleted');
 $lastrefreshcounts = json_decode((string) get_config('local_courseaudit', 'lastrefreshcounts'), true);
 $refreshpending = $DB->record_exists('task_adhoc', ['classname' => '\\local_courseaudit\\task\\refresh_audit_adhoc']);
 
-// Charts reflect whatever's currently filtered ($fromwheresql/$params above), not just the
-// current page's 50 rows - so "compliance rate for School X" actually means all of School X's
-// courses, not just whichever ones happen to be on this page.
-$compliancechart = dashboard_charts::compliance_chart($fromwheresql, $params);
-$programlevelchart = dashboard_charts::programlevel_chart($fromwheresql, $params);
-$schoolchart = dashboard_charts::school_chart($fromwheresql, $params);
-$studentsteacherschart = dashboard_charts::students_teachers_chart($fromwheresql, $params);
+// Unit/lecturer rows with no timetable match: the clearest data-quality signal on this page
+// (School and Programme come from the timetable, so an unmatched course has neither).
+$unmatchedcount = $hassystemview
+    ? (int) $DB->count_records('local_courseaudit_audit', ['hastimetablematch' => 0])
+    : (int) $DB->count_records_sql("SELECT COUNT(a.id) $scopewheresql AND a.hastimetablematch = 0", $scopeparams);
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('dashboard_heading', 'local_courseaudit'));
 
-// Action buttons. Import/Classify/History/Refresh/Export/Clear are all manage-only: a category-
-// scoped coordinator (view-only, see access check above) gets read visibility into their
-// faculty's rows but not the ability to change data, re-run heuristics, or see other faculties'
-// history - that stays with the QA/admin team holding :manage at system context.
+// Title row: the actions people use every day stay visible, everything occasional goes in "More".
+echo html_writer::start_div('d-flex flex-wrap align-items-center justify-content-between mb-3');
+echo $OUTPUT->heading(get_string('dashboard_heading', 'local_courseaudit'), 2, 'mb-0');
+echo html_writer::start_div('local_courseaudit-actions d-flex flex-wrap align-items-center');
+echo html_writer::link(new moodle_url('/local/courseaudit/atriskstudents.php', [
+    'categoryid' => $categoryid, 'school' => $school, 'programlevel' => $programlevel, 'search' => $search,
+]), get_string('atrisk_button', 'local_courseaudit'), ['class' => 'btn btn-outline-secondary mr-2 me-2']);
 if ($canmanage) {
-    echo html_writer::start_div('local_courseaudit-actions mb-3');
-    echo html_writer::link(new moodle_url('/local/courseaudit/import.php'), get_string('importtimetable', 'local_courseaudit'),
-        ['class' => 'btn btn-secondary mr-2']);
-    echo html_writer::link(new moodle_url('/local/courseaudit/history.php'), get_string('audithistory', 'local_courseaudit'),
-        ['class' => 'btn btn-secondary mr-2']);
-    echo html_writer::link(new moodle_url('/local/courseaudit/programmap.php'), get_string('programmap', 'local_courseaudit') .
-        ($unclassifiedprogrammes > 0 ? " ({$unclassifiedprogrammes})" : ''), ['class' => 'btn btn-secondary mr-2']);
-    echo html_writer::link(new moodle_url('/local/courseaudit/manageschools.php'), get_string('manageschools', 'local_courseaudit'),
-        ['class' => 'btn btn-secondary mr-2']);
-    $refreshurl = new moodle_url($pageurl, ['action' => 'refresh', 'sesskey' => sesskey()]);
-    echo html_writer::link($refreshurl, get_string('refresh', 'local_courseaudit'), ['class' => 'btn btn-secondary mr-2']);
-    // Carries every currently-applied filter through to export.php, so "Export" always exports
-    // exactly the rows on screen right now, not the whole site regardless of what's filtered.
+    echo html_writer::link(new moodle_url($pageurl, ['action' => 'refresh', 'sesskey' => sesskey()]),
+        get_string('refresh', 'local_courseaudit'), ['class' => 'btn btn-outline-secondary mr-2 me-2']);
+    // Carries every applied filter through, so Export always matches what is on screen.
     echo html_writer::link(new moodle_url('/local/courseaudit/export.php', [
         'categoryid' => $categoryid, 'school' => $school, 'programlevel' => $programlevel,
         'reviewedfilter' => $reviewedfilter, 'needsclassification' => $needsclassificationfilter, 'search' => $search,
         'mlcourserisk' => $mlcourserisk, 'mlstudentrisk' => $mlstudentrisk,
-    ]), get_string('export', 'local_courseaudit'), ['class' => 'btn btn-primary mr-2']);
-    echo html_writer::link(new moodle_url('/local/courseaudit/index.php', ['action' => 'clearconfirm']),
-        get_string('clearall', 'local_courseaudit'), ['class' => 'btn btn-outline-danger mr-2']);
+    ]), get_string('export', 'local_courseaudit'), ['class' => 'btn btn-primary mr-2 me-2']);
+
+    $menuitems = [
+        html_writer::link(new moodle_url('/local/courseaudit/import.php'), get_string('importtimetable', 'local_courseaudit'),
+            ['class' => 'dropdown-item']),
+        html_writer::link(new moodle_url('/local/courseaudit/programmap.php'), get_string('programmap', 'local_courseaudit') .
+            ($unclassifiedprogrammes > 0 ? " ({$unclassifiedprogrammes})" : ''), ['class' => 'dropdown-item']),
+        html_writer::link(new moodle_url('/local/courseaudit/manageschools.php'), get_string('manageschools', 'local_courseaudit'),
+            ['class' => 'dropdown-item']),
+        html_writer::link(new moodle_url('/local/courseaudit/history.php'), get_string('audithistory', 'local_courseaudit'),
+            ['class' => 'dropdown-item']),
+        html_writer::div('', 'dropdown-divider'),
+        html_writer::link(new moodle_url('/local/courseaudit/index.php', ['action' => 'clearconfirm']),
+            get_string('clearall', 'local_courseaudit'), ['class' => 'dropdown-item text-danger']),
+    ];
+    // Both attribute spellings: Bootstrap 4 themes read data-toggle, Bootstrap 5 reads data-bs-toggle.
+    echo html_writer::start_div('dropdown d-inline-block');
+    echo html_writer::tag('button', get_string('more', 'local_courseaudit'), ['type' => 'button',
+        'class' => 'btn btn-outline-secondary dropdown-toggle', 'data-toggle' => 'dropdown', 'data-bs-toggle' => 'dropdown',
+        'aria-haspopup' => 'true', 'aria-expanded' => 'false']);
+    echo html_writer::div(implode('', $menuitems), 'dropdown-menu dropdown-menu-right dropdown-menu-end');
     echo html_writer::end_div();
-}
-
-// At-risk students report: available to every viewer (scoped to their own categories inside the
-// page itself), not just managers - coordinators are the people who act on it.
-// Always shown: the page itself explains what's missing when the model isn't ready yet.
-{
-    echo html_writer::start_div('mb-3');
-    echo html_writer::link(new moodle_url('/local/courseaudit/atriskstudents.php', [
-        'categoryid' => $categoryid, 'school' => $school, 'programlevel' => $programlevel, 'search' => $search,
-    ]), get_string('atrisk_button', 'local_courseaudit'), ['class' => 'btn btn-secondary']);
-    echo html_writer::end_div();
-}
-
-// Refresh status - manage-only: it's about the site-wide refresh mechanism a category-scoped
-// viewer can't trigger anyway, and refreshfailures below can name specific courses from
-// categories they don't have access to.
-if ($canmanage) {
-    echo html_writer::start_div('local_courseaudit-refreshstatus mb-3 text-muted');
-    if ($refreshpending) {
-        echo html_writer::tag('span', get_string('refreshpending', 'local_courseaudit'), ['class' => 'badge badge-info mr-2']);
-    }
-    if (!empty($lastrefreshcompleted)) {
-        $countstext = '';
-        if (is_array($lastrefreshcounts)) {
-            $countstext = ' ' . get_string('refreshcountssummary', 'local_courseaudit', (object) $lastrefreshcounts);
-        }
-        echo html_writer::tag('span', get_string('lastrefreshcompleted', 'local_courseaudit',
-            userdate($lastrefreshcompleted, get_string('strftimedatetimeshort', 'core_langconfig'))) . $countstext);
-    } else {
-        echo html_writer::tag('span', get_string('lastrefreshnever', 'local_courseaudit'));
-    }
-    echo html_writer::end_div();
-
-    if (is_array($lastrefreshcounts) && !empty($lastrefreshcounts['failed'])) {
-        echo $OUTPUT->notification(
-            get_string('refreshfailures', 'local_courseaudit', $lastrefreshcounts['failed']),
-            \core\output\notification::NOTIFY_WARNING
-        );
-    }
-}
-
-// Summary chips.
-echo html_writer::start_div('local_courseaudit-summary mb-3');
-echo html_writer::tag('span', "{$totalcount} courses audited", ['class' => 'badge badge-secondary mr-2']);
-echo html_writer::tag('span', "{$unreviewedcount} " . get_string('notreviewed', 'local_courseaudit'),
-    ['class' => 'badge badge-warning mr-2']);
-echo html_writer::tag('span', "{$needsclassificationcount} " . get_string('needsclassification', 'local_courseaudit'),
-    ['class' => 'badge badge-danger mr-2']);
-if ($mlavailable) {
-    echo html_writer::tag('span',
-        get_string('mlcourseriskcount', 'local_courseaudit', $mlcourseriskcount),
-        ['class' => 'badge badge-danger mr-2']);
-    echo html_writer::tag('span',
-        get_string('mlstudentriskcount', 'local_courseaudit', $mlstudentriskcount),
-        ['class' => 'badge badge-danger mr-2']);
 }
 echo html_writer::end_div();
+echo html_writer::end_div();
 
-// ML Backend not set up yet - manage-only, since enabling/training models is a site admin
-// action a category-scoped viewer can't do anything about anyway.
-if (!$mlavailable && $canmanage) {
-    echo $OUTPUT->notification(get_string('mlnotavailable', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
+// One quiet status line (manage only): how fresh the data is, plus anything that failed.
+if ($canmanage) {
+    $statusbits = [];
+    if ($refreshpending) {
+        $statusbits[] = html_writer::tag('span', get_string('refreshpending', 'local_courseaudit'), ['class' => 'badge badge-info bg-info']);
+    }
+    if (!empty($lastrefreshcompleted)) {
+        $statusbits[] = get_string('lastrefreshcompleted', 'local_courseaudit',
+            userdate($lastrefreshcompleted, get_string('strftimedatetimeshort', 'core_langconfig')));
+    } else {
+        $statusbits[] = get_string('lastrefreshnever', 'local_courseaudit');
+    }
+    echo html_writer::tag('p', implode(' &middot; ', $statusbits), ['class' => 'text-muted small mb-2']);
+    if (is_array($lastrefreshcounts) && !empty($lastrefreshcounts['failed'])) {
+        echo $OUTPUT->notification(get_string('refreshfailures', 'local_courseaudit', $lastrefreshcounts['failed']),
+            \core\output\notification::NOTIFY_WARNING);
+    }
 }
 
-// KPI cards and trend charts. These read the daily snapshots (see trend_snapshot), so they follow
-// the Category and School filters only - the other filters narrow the live table and charts, but
-// a snapshot can't be re-filtered by, say, a search term after the fact.
+// What needs doing, in one line: each to-do figure links to the rows it counts.
+$todo = [html_writer::tag('strong', number_format($totalcount)) . ' ' . get_string('summary_audited', 'local_courseaudit')];
+$todo[] = html_writer::link(new moodle_url($dashboardurl, ['reviewedfilter' => 'no']),
+    number_format($unreviewedcount) . ' ' . get_string('notreviewed', 'local_courseaudit'));
+if ($needsclassificationcount > 0) {
+    $todo[] = html_writer::link(new moodle_url($dashboardurl, ['needsclassification' => 'yes']),
+        number_format($needsclassificationcount) . ' ' . get_string('needsclassification', 'local_courseaudit'));
+}
+if ($unmatchedcount > 0) {
+    $todo[] = html_writer::tag('span', number_format($unmatchedcount) . ' ' . get_string('summary_unmatched', 'local_courseaudit'),
+        ['title' => get_string('summary_unmatched_help', 'local_courseaudit')]);
+}
+if ($mlavailable && $mlstudentriskcount > 0) {
+    $todo[] = html_writer::link(new moodle_url('/local/courseaudit/atriskstudents.php'),
+        get_string('mlstudentriskcount', 'local_courseaudit', number_format($mlstudentriskcount)), ['class' => 'text-danger']);
+}
+echo html_writer::tag('p', implode(' &nbsp;&middot;&nbsp; ', $todo), ['class' => 'local_courseaudit-summaryline mb-3']);
+
+// KPI cards and the compliance line graph. Both read the daily snapshots (see trend_snapshot), so
+// they follow the Category and School filters only - a snapshot can't be re-filtered by a search
+// term after the fact.
 $trendrows = trend_report::fetch_rows($hassystemview, $allowedcategoryids, (int) $categoryid, (string) $school,
     trend_report::since_day($trendweeks, time()));
 $trenddaily = trend_report::daily_totals($trendrows);
 $trendbuckets = trend_report::bucket($trenddaily, $trendgrain);
 $kpis = trend_report::kpis($trenddaily);
 
-$trendlabels = [
+$kpilabels = [
     'overall' => get_string('kpi_overall', 'local_courseaudit'),
     'template' => get_string('kpi_template', 'local_courseaudit'),
     'attendance' => get_string('kpi_attendance', 'local_courseaudit'),
@@ -363,9 +348,14 @@ $trendlabels = [
     'feedback' => get_string('kpi_feedback', 'local_courseaudit'),
     'reviewed' => get_string('kpi_reviewed', 'local_courseaudit'),
 ];
-// The "reviewed" metric stays a KPI card but is a workflow measure, not a requirement, so it isn't drawn as a line.
-$trendchart = dashboard_charts::trend_chart($trendbuckets, array_diff_key($trendlabels, ['reviewed' => true]),
-    get_string('trend_chart_title', 'local_courseaudit'));
+$countlabels = [
+    'courses' => get_string('trend_series_courses', 'local_courseaudit'),
+    'template' => get_string('kpi_template', 'local_courseaudit'),
+    'attendance' => get_string('kpi_attendance', 'local_courseaudit'),
+    'materials' => get_string('kpi_materials', 'local_courseaudit'),
+    'cats' => get_string('trend_series_cats', 'local_courseaudit'),
+];
+$trendchart = dashboard_charts::trend_count_chart($trendbuckets, $countlabels, get_string('trend_chart_title', 'local_courseaudit'));
 
 if ($kpis !== null) {
     $compareday = $kpis['baselinegap'] ?? 7;
@@ -374,36 +364,27 @@ if ($kpis !== null) {
             \DateTimeImmutable::createFromFormat('!Ymd', (string) $kpis['asof'], new \DateTimeZone('UTC'))->getTimestamp(),
             get_string('strftimedatefullshort', 'core_langconfig'), 99, false)),
         ['class' => 'text-muted small mb-1']);
-    echo trend_view::cards($kpis, $trendlabels, get_string('kpi_pts', 'local_courseaudit'),
+    echo trend_view::cards($kpis, $kpilabels, get_string('kpi_pts', 'local_courseaudit'),
         get_string('kpi_vsprevious', 'local_courseaudit', $compareday));
 }
 
-echo html_writer::start_div('local_courseaudit-trends mb-3');
-echo html_writer::start_div('d-flex flex-wrap align-items-center mb-2 local_courseaudit-trend-controls');
-echo $OUTPUT->heading(get_string('trend_heading', 'local_courseaudit'), 4, 'mb-0 mr-3');
-echo html_writer::tag('span', get_string('trend_grain', 'local_courseaudit') . ':', ['class' => 'mr-1 text-muted small']);
+echo html_writer::start_div('local_courseaudit-chartbox local_courseaudit-chartbox-wide mb-3');
+echo html_writer::start_div('d-flex flex-wrap align-items-center justify-content-end mb-1 local_courseaudit-trend-controls');
 foreach ([trend_report::GRAIN_DAY => 'trend_grain_day', trend_report::GRAIN_WEEK => 'trend_grain_week'] as $grain => $stringkey) {
     echo html_writer::link(new moodle_url($pageurl, ['trendgrain' => $grain]), get_string($stringkey, 'local_courseaudit'),
-        ['class' => 'btn btn-sm ' . ($grain === $trendgrain ? 'btn-primary' : 'btn-outline-secondary')]);
+        ['class' => 'btn btn-sm mr-1 me-1 ' . ($grain === $trendgrain ? 'btn-primary' : 'btn-outline-secondary')]);
 }
-echo html_writer::tag('span', get_string('trend_range', 'local_courseaudit') . ':', ['class' => 'ml-3 mr-1 text-muted small']);
+echo html_writer::tag('span', '|', ['class' => 'mx-2 text-muted']);
 foreach ([4, 12, 26, 0] as $weeks) {
     $rangelabel = $weeks === 0 ? get_string('trend_range_all', 'local_courseaudit')
         : get_string('trend_range_weeks', 'local_courseaudit', $weeks);
     echo html_writer::link(new moodle_url($pageurl, ['trendweeks' => $weeks]), $rangelabel,
-        ['class' => 'btn btn-sm ' . ($weeks === $trendweeks ? 'btn-primary' : 'btn-outline-secondary')]);
+        ['class' => 'btn btn-sm mr-1 me-1 ' . ($weeks === $trendweeks ? 'btn-primary' : 'btn-outline-secondary')]);
 }
 echo html_writer::end_div();
-
 if ($trendchart) {
-    echo html_writer::start_div('row local_courseaudit-chartrow');
-    echo html_writer::start_div('col-12 mb-3');
-    echo html_writer::start_div('local_courseaudit-chartbox');
     echo $OUTPUT->render_chart($trendchart, false);
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::tag('p', get_string('trend_scope_note', 'local_courseaudit'), ['class' => 'text-muted small']);
+    echo html_writer::tag('p', get_string('trend_scope_note', 'local_courseaudit'), ['class' => 'text-muted small mb-0']);
 } else {
     echo $OUTPUT->notification(get_string('trend_none', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
 }
@@ -493,128 +474,79 @@ if ($attentionschools['lowest'] || $attentionlecturers) {
     echo html_writer::end_div();
 }
 
-// Charts - the bar chart and pies all reflect the filters below, so drilling down (e.g.
-// School = SOB) updates every chart, not just the table. Nothing to show yet until at least
-// one refresh has populated the audit table.
-$piecharts = array_values(array_filter([$programlevelchart, $schoolchart, $studentsteacherschart]));
-
-if ($compliancechart || $piecharts) {
-    echo html_writer::start_div('local_courseaudit-charts');
-
-    // Compliance rate (stacked bar) gets its own full-width row - it needs the horizontal room
-    // to stay readable.
-    if ($compliancechart) {
-        echo html_writer::start_div('row mb-3 local_courseaudit-chartrow');
-        echo html_writer::start_div('col-md-12');
-        echo html_writer::start_div('local_courseaudit-chartbox local_courseaudit-chartbox-wide');
-        echo $OUTPUT->render_chart($compliancechart, false);
-        echo html_writer::end_div();
-        echo html_writer::end_div();
-        echo html_writer::end_div();
-    }
-
-    // Pie charts share one row, side by side - much better use of screen space than stacking
-    // three small pies full-width one under another. Each is wrapped to a fixed, modest height
-    // (see styles.css) so Chart.js's responsive resizing fits all of them within the viewport
-    // width instead of growing wide enough to need horizontal scrolling. Column classes cover
-    // both tablet (2 across) and desktop (3 across) widths, collapsing to one per row on phones -
-    // width adapts to however many of the three actually have data this refresh, rather than
-    // assuming all three are present.
-    if ($piecharts) {
-        $piecount = count($piecharts);
-        $piecolclass = $piecount === 1 ? 'col-md-12' : ($piecount === 2 ? 'col-sm-6 col-md-6' : 'col-sm-6 col-md-4');
-        echo html_writer::start_div('row mb-3 local_courseaudit-chartrow');
-        foreach ($piecharts as $chart) {
-            echo html_writer::start_div($piecolclass . ' mb-3');
-            echo html_writer::start_div('local_courseaudit-chartbox local_courseaudit-chartbox-pie h-100');
-            echo $OUTPUT->render_chart($chart, false);
-            echo html_writer::end_div();
-            echo html_writer::end_div();
-        }
-        echo html_writer::end_div();
-    }
-    echo html_writer::end_div();
-}
-
-// Filter form.
+// Filters: the five that matter inline, the rest tucked under "More filters".
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $pageurl->out_omit_querystring(), 'class' => 'form-inline mb-2']);
-// Keep the chosen trend view when filters are applied.
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendgrain', 'value' => $trendgrain]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'trendweeks', 'value' => $trendweeks]);
 
-echo html_writer::tag('label', get_string('filtersearch', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_search']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'name' => 'search', 'id' => 'id_search', 'value' => s($search),
-    'placeholder' => get_string('filtersearch_placeholder', 'local_courseaudit'), 'class' => 'mr-2', 'size' => 24]);
-
-echo html_writer::tag('label', get_string('filtercategory', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_categoryid']);
-$categoryoptions = [0 => get_string('allcategories', 'local_courseaudit')] + $categories;
-echo html_writer::select($categoryoptions, 'categoryid', $categoryid, null, ['class' => 'mr-2', 'id' => 'id_categoryid']);
-
-echo html_writer::tag('label', get_string('filterschool', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_school']);
+    'placeholder' => get_string('filtersearch_placeholder', 'local_courseaudit'), 'class' => 'mr-2 me-2 form-control',
+    'size' => 26, 'aria-label' => get_string('filtersearch', 'local_courseaudit')]);
+echo html_writer::select([0 => get_string('allcategories', 'local_courseaudit')] + $categories, 'categoryid', $categoryid, null,
+    ['class' => 'mr-2 me-2', 'id' => 'id_categoryid', 'aria-label' => get_string('filtercategory', 'local_courseaudit')]);
 $schooloptions = ['' => get_string('allschools', 'local_courseaudit')];
 foreach ($schools as $s) {
     $schooloptions[$s] = $s;
 }
-echo html_writer::select($schooloptions, 'school', $school, null, ['class' => 'mr-2', 'id' => 'id_school']);
-
-echo html_writer::tag('label', get_string('filterprogramlevel', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_programlevel']);
+echo html_writer::select($schooloptions, 'school', $school, null,
+    ['class' => 'mr-2 me-2', 'id' => 'id_school', 'aria-label' => get_string('filterschool', 'local_courseaudit')]);
 $programleveloptions = ['' => get_string('alllevels', 'local_courseaudit')];
 foreach (program_mapper::LEVELS as $level) {
     $programleveloptions[$level] = $level;
 }
-echo html_writer::select($programleveloptions, 'programlevel', $programlevel, null, ['class' => 'mr-2', 'id' => 'id_programlevel']);
-
-echo html_writer::tag('label', get_string('filterreviewed', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_reviewedfilter']);
-$reviewedoptions = [
+echo html_writer::select($programleveloptions, 'programlevel', $programlevel, null,
+    ['class' => 'mr-2 me-2', 'id' => 'id_programlevel', 'aria-label' => get_string('filterprogramlevel', 'local_courseaudit')]);
+echo html_writer::select([
     '' => get_string('anystatus', 'local_courseaudit'),
     'yes' => get_string('reviewed', 'local_courseaudit'),
     'no' => get_string('notreviewed', 'local_courseaudit'),
-];
-echo html_writer::select($reviewedoptions, 'reviewedfilter', $reviewedfilter, null, ['class' => 'mr-2', 'id' => 'id_reviewedfilter']);
+], 'reviewedfilter', $reviewedfilter, null,
+    ['class' => 'mr-2 me-2', 'id' => 'id_reviewedfilter', 'aria-label' => get_string('filterreviewed', 'local_courseaudit')]);
 
-echo html_writer::tag('label', get_string('filterneedsclassification', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_needsclassification']);
-$needsclassificationoptions = [
+// Secondary filters stay open if one is already applied, so an active filter is never hidden.
+$morefiltersopen = $needsclassificationfilter !== '' || $mlcourserisk !== '' || $mlstudentrisk !== '';
+echo html_writer::start_tag('details', ['class' => 'mr-2 me-2 local_courseaudit-morefilters'] + ($morefiltersopen ? ['open' => 'open'] : []));
+echo html_writer::tag('summary', get_string('morefilters', 'local_courseaudit'), ['class' => 'btn btn-link p-0']);
+echo html_writer::select([
     '' => get_string('anystatus', 'local_courseaudit'),
     'yes' => get_string('needsclassification', 'local_courseaudit'),
     'no' => get_string('classified', 'local_courseaudit'),
-];
-echo html_writer::select($needsclassificationoptions, 'needsclassification', $needsclassificationfilter, null,
-    ['class' => 'mr-2', 'id' => 'id_needsclassification']);
-
-// ML risk filters only shown once there's actually something to filter on - an empty dropdown
-// for a feature with zero data yet would just be confusing, not useful.
+], 'needsclassification', $needsclassificationfilter, null,
+    ['class' => 'ml-2 ms-2', 'id' => 'id_needsclassification', 'aria-label' => get_string('filterneedsclassification', 'local_courseaudit')]);
 if ($mlavailable) {
-    echo html_writer::tag('label', get_string('filtermlcourserisk', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_mlcourserisk']);
-    $mlcourseriskoptions = [
+    $mloptions = [
         '' => get_string('anystatus', 'local_courseaudit'),
         'yes' => get_string('mlatrisk', 'local_courseaudit'),
         'no' => get_string('mlnotflagged', 'local_courseaudit'),
     ];
-    echo html_writer::select($mlcourseriskoptions, 'mlcourserisk', $mlcourserisk, null, ['class' => 'mr-2', 'id' => 'id_mlcourserisk']);
-
-    echo html_writer::tag('label', get_string('filtermlstudentrisk', 'local_courseaudit'), ['class' => 'mr-1', 'for' => 'id_mlstudentrisk']);
-    $mlstudentriskoptions = [
-        '' => get_string('anystatus', 'local_courseaudit'),
-        'yes' => get_string('mlatrisk', 'local_courseaudit'),
-        'no' => get_string('mlnotflagged', 'local_courseaudit'),
-    ];
-    echo html_writer::select($mlstudentriskoptions, 'mlstudentrisk', $mlstudentrisk, null, ['class' => 'mr-2', 'id' => 'id_mlstudentrisk']);
+    echo html_writer::select($mloptions, 'mlcourserisk', $mlcourserisk, null,
+        ['class' => 'ml-2 ms-2', 'id' => 'id_mlcourserisk', 'aria-label' => get_string('filtermlcourserisk', 'local_courseaudit')]);
+    echo html_writer::select($mloptions, 'mlstudentrisk', $mlstudentrisk, null,
+        ['class' => 'ml-2 ms-2', 'id' => 'id_mlstudentrisk', 'aria-label' => get_string('filtermlstudentrisk', 'local_courseaudit')]);
 }
+echo html_writer::end_tag('details');
 
-echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('filter'),
-    'class' => 'btn btn-secondary mr-2']);
+echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('filter'), 'class' => 'btn btn-secondary mr-2 me-2']);
 if (dashboard_filters::any_active($filters)) {
-    echo html_writer::link($dashboardurl, get_string('resetfilters', 'local_courseaudit'), ['class' => 'btn btn-outline-secondary']);
+    echo html_writer::link($dashboardurl, get_string('resetfilters', 'local_courseaudit'), ['class' => 'btn btn-link']);
 }
 echo html_writer::end_tag('form');
 
-// Filtered-vs-total count - always shown, so it's obvious at a glance whether the table below is
-// the whole scope or a narrowed-down view, without having to inspect which dropdowns are set.
 echo html_writer::tag('p', get_string('filteredcount', 'local_courseaudit', (object) [
     'filtered' => $filteredcount, 'total' => $totalcount,
-]), ['class' => 'text-muted mb-2']);
+]), ['class' => 'text-muted small mb-2']);
 
-// Results table.
+// Compliance cell helpers: a coloured pill reads faster down a column than the words "Yes"/"No".
+$yesno = static function (?string $value): string {
+    if ($value === 'Yes') {
+        return html_writer::tag('span', get_string('yes'), ['class' => 'badge local_courseaudit-pill-good']);
+    }
+    if ($value === 'No') {
+        return html_writer::tag('span', get_string('no'), ['class' => 'badge local_courseaudit-pill-poor']);
+    }
+    return '-';
+};
+
 if ($filteredcount === 0) {
     echo $OUTPUT->notification(get_string('nocourses', 'local_courseaudit'), \core\output\notification::NOTIFY_INFO);
 } else {
@@ -623,7 +555,10 @@ if ($filteredcount === 0) {
         echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     }
 
+    // Slim table: what you need to judge a course at a glance. Programme, level, mode of learning,
+    // the individual feedback columns, comments and check date are all in Edit and in the export.
     $table = new html_table();
+    $table->attributes['class'] = 'generaltable local_courseaudit-table';
     $table->head = [];
     if ($canmanage) {
         $table->head[] = html_writer::empty_tag('input', [
@@ -633,25 +568,15 @@ if ($filteredcount === 0) {
         ]);
     }
     $table->head = array_merge($table->head, [
-        get_string('col_datechecked', 'local_courseaudit'),
-        get_string('col_unitcode', 'local_courseaudit'),
-        get_string('col_unitname', 'local_courseaudit'),
+        get_string('col_unit', 'local_courseaudit'),
         get_string('col_school', 'local_courseaudit'),
-        get_string('col_programme', 'local_courseaudit'),
-        get_string('col_numstudents', 'local_courseaudit'),
         get_string('col_lecturername', 'local_courseaudit'),
-        get_string('col_programlevel', 'local_courseaudit'),
-        get_string('col_modeoflearning', 'local_courseaudit'),
+        get_string('col_numstudents', 'local_courseaudit'),
         get_string('col_templatedeployed', 'local_courseaudit'),
         get_string('col_attendancelink', 'local_courseaudit'),
         get_string('col_materialsweeks', 'local_courseaudit'),
         get_string('col_numcatsquizzes', 'local_courseaudit'),
-        get_string('col_assign1feedback', 'local_courseaudit'),
-        get_string('col_assign2feedback', 'local_courseaudit'),
-        get_string('col_assign3feedback', 'local_courseaudit'),
-        get_string('col_cat1feedback', 'local_courseaudit'),
-        get_string('col_cat2feedback', 'local_courseaudit'),
-        get_string('col_comments', 'local_courseaudit'),
+        get_string('col_feedback', 'local_courseaudit'),
         get_string('col_reviewed', 'local_courseaudit'),
     ]);
     if ($mlavailable) {
@@ -663,22 +588,40 @@ if ($filteredcount === 0) {
     $table->data = [];
 
     foreach ($rows as $row) {
-        $courseurl = new moodle_url('/course/view.php', ['id' => $row->courseid]);
-        $unitcodecell = html_writer::link($courseurl, s($row->unitcode ?: '-'));
+        $unitcell = html_writer::link(new moodle_url('/course/view.php', ['id' => $row->courseid]),
+            s($row->unitcode ?: '-'), ['class' => 'font-weight-bold fw-bold']);
         if (!empty($row->needsclassification)) {
-            $unitcodecell .= ' ' . html_writer::tag('span', '!', [
-                'class' => 'badge badge-danger', 'title' => get_string('needsclassification', 'local_courseaudit'),
+            $unitcell .= ' ' . html_writer::tag('span', '!', [
+                'class' => 'badge badge-danger bg-danger', 'title' => get_string('needsclassification', 'local_courseaudit'),
             ]);
         }
+        if (!empty($row->unitname)) {
+            $unitcell .= html_writer::tag('div', s(shorten_text($row->unitname, 48)), ['class' => 'text-muted small', 'title' => s($row->unitname)]);
+        }
 
-        $editurl = new moodle_url('/local/courseaudit/edit.php', ['id' => $row->id, 'returnurl' => $pageurlwithpage->out_as_local_url(false)]);
+        // Materials: weeks posted. Zero is the failing case, so it is the one that is coloured.
+        $materials = $row->materialsweeks;
+        $materialscell = ($materials === null || $materials === '') ? '-'
+            : html_writer::tag('span', s($materials), ['class' => 'badge ' . ((int) $materials > 0 ? 'local_courseaudit-pill-good' : 'local_courseaudit-pill-poor')]);
+        $cats = trim((string) $row->numcatsquizzes);
+        $catscell = $cats === '' ? '-'
+            : html_writer::tag('span', s($cats), ['class' => 'badge ' . (strcasecmp($cats, 'None') === 0 ? 'local_courseaudit-pill-poor' : 'local_courseaudit-pill-good')]);
+
+        // Feedback: how many of the five feedback items (3 assignments, 2 CATs) have grades.
+        $flags = trend_snapshot::row_flags($row);
+        $feedbackdone = $flags['assign1yes'] + $flags['assign2yes'] + $flags['assign3yes'] + $flags['cat1yes'] + $flags['cat2yes'];
+        $feedbackcell = html_writer::tag('span', $feedbackdone . '/5', [
+            'class' => 'badge ' . ($feedbackdone === 5 ? 'local_courseaudit-pill-good' : ($feedbackdone === 0 ? 'local_courseaudit-pill-poor' : 'local_courseaudit-pill-warn')),
+            'title' => get_string('col_assign1feedback', 'local_courseaudit') . ': ' . ($row->assign1feedback ?: '-') . '; '
+                . get_string('col_assign2feedback', 'local_courseaudit') . ': ' . ($row->assign2feedback ?: '-') . '; '
+                . get_string('col_assign3feedback', 'local_courseaudit') . ': ' . ($row->assign3feedback ?: '-') . '; '
+                . get_string('col_cat1feedback', 'local_courseaudit') . ': ' . ($row->cat1feedback ?: '-') . '; '
+                . get_string('col_cat2feedback', 'local_courseaudit') . ': ' . ($row->cat2feedback ?: '-'),
+        ]);
+
         $reviewedbadge = !empty($row->reviewed)
-            ? html_writer::tag('span', get_string('reviewed', 'local_courseaudit'), ['class' => 'badge badge-success'])
-            : html_writer::tag('span', get_string('notreviewed', 'local_courseaudit'), ['class' => 'badge badge-secondary']);
-
-        $commentstext = (string) ($row->comments ?? '');
-        $commentscell = $commentstext === '' ? '-' : html_writer::tag('span', s(shorten_text($commentstext, 60)),
-            ['title' => s($commentstext)]);
+            ? html_writer::tag('span', get_string('reviewed', 'local_courseaudit'), ['class' => 'badge badge-success bg-success'])
+            : html_writer::tag('span', get_string('notreviewed', 'local_courseaudit'), ['class' => 'badge badge-secondary bg-secondary']);
 
         $datarow = [];
         if ($canmanage) {
@@ -687,42 +630,33 @@ if ($filteredcount === 0) {
             ]);
         }
         $datarow = array_merge($datarow, [
-            !empty($row->datechecked) ? userdate($row->datechecked, get_string('strftimedatefullshort', 'core_langconfig')) : '-',
-            $unitcodecell,
-            s($row->unitname ?: '-'),
+            $unitcell,
             s($row->school ?: '-'),
-            s($row->programme ?: '-'),
-            $row->numstudents ?? '-',
             s($row->lecturername ?: '-'),
-            s($row->programlevel ?: '-'),
-            s($row->modeoflearning ?: '-'),
-            s($row->templatedeployed ?: '-'),
-            s($row->attendancelink ?: '-'),
-            s($row->materialsweeks ?? '-'), // materialsweeks is a count now - "0" is meaningful, not "unset".
-            s($row->numcatsquizzes ?: '-'),
-            s($row->assign1feedback ?: '-'),
-            s($row->assign2feedback ?: '-'),
-            s($row->assign3feedback ?: '-'),
-            s($row->cat1feedback ?: '-'),
-            s($row->cat2feedback ?: '-'),
-            $commentscell,
+            $row->numstudents ?? '-',
+            $yesno($row->templatedeployed),
+            $yesno($row->attendancelink),
+            $materialscell,
+            $catscell,
+            $feedbackcell,
             $reviewedbadge,
         ]);
         if ($mlavailable) {
             $mlbadges = [];
             if (isset($mlcourseriskflags[$row->courseid])) {
                 $mlbadges[] = html_writer::tag('span', get_string('mlcourseriskbadge', 'local_courseaudit'),
-                    ['class' => 'badge badge-danger mr-1', 'title' => get_string('mlcourseriskbadge_help', 'local_courseaudit')]);
+                    ['class' => 'badge badge-danger bg-danger mr-1 me-1', 'title' => get_string('mlcourseriskbadge_help', 'local_courseaudit')]);
             }
             if (!empty($mlstudentriskbycourse[$row->courseid])) {
                 $mlbadges[] = html_writer::tag('span',
                     get_string('mlstudentriskbadge', 'local_courseaudit', $mlstudentriskbycourse[$row->courseid]),
-                    ['class' => 'badge badge-warning', 'title' => get_string('mlstudentriskbadge_help', 'local_courseaudit')]);
+                    ['class' => 'badge badge-warning bg-warning', 'title' => get_string('mlstudentriskbadge_help', 'local_courseaudit')]);
             }
             $datarow[] = empty($mlbadges) ? '-' : implode(' ', $mlbadges);
         }
         if ($canmanage) {
-            $datarow[] = html_writer::link($editurl, get_string('edit'));
+            $datarow[] = html_writer::link(new moodle_url('/local/courseaudit/edit.php',
+                ['id' => $row->id, 'returnurl' => $pageurlwithpage->out_as_local_url(false)]), get_string('edit'));
         }
         $table->data[] = $datarow;
     }
@@ -737,15 +671,12 @@ if ($filteredcount === 0) {
 
     if ($canmanage) {
         echo html_writer::start_div('local_courseaudit-bulkactions mt-2');
-        // Two submit buttons sharing name="bulkaction" - standard HTML form behaviour sends
-        // whichever button's own value was clicked, no JS needed to tell them apart server-side.
+        // Two submit buttons sharing name="bulkaction": the browser sends whichever one was clicked.
         echo html_writer::tag('button', get_string('bulkmarkreviewed', 'local_courseaudit'),
-            ['type' => 'submit', 'name' => 'bulkaction', 'value' => 'review', 'class' => 'btn btn-success mr-2']);
+            ['type' => 'submit', 'name' => 'bulkaction', 'value' => 'review', 'class' => 'btn btn-success mr-2 me-2']);
         echo html_writer::tag('button', get_string('bulkmarkunreviewed', 'local_courseaudit'),
             ['type' => 'submit', 'name' => 'bulkaction', 'value' => 'unreview', 'class' => 'btn btn-outline-secondary']);
         echo html_writer::end_div();
-    }
-    if ($canmanage) {
         echo html_writer::end_tag('form');
     }
 }

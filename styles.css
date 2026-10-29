@@ -84,3 +84,12 @@ body.path-local-courseaudit #page.drawers {
 .local_courseaudit-pill-poor { background: #C0392B; color: #fff; }
 .local_courseaudit-pill-none { background: #9AA5B8; color: #fff; }
 .local_courseaudit-attention table { width: 100%; }
+
+/* Dashboard: one-line summary, slim course table. */
+.local_courseaudit-summaryline { font-size: 1rem; }
+.local_courseaudit-table td { vertical-align: middle; }
+.local_courseaudit-table th { white-space: nowrap; }
+.local_courseaudit-morefilters { display: inline-block; vertical-align: middle; }
+.local_courseaudit-morefilters summary { cursor: pointer; list-style: none; }
+.local_courseaudit-morefilters[open] { display: inline-flex; align-items: center; }
+.local_courseaudit-pill-warn, .local_courseaudit-pill-good, .local_courseaudit-pill-poor { font-weight: 600; }
