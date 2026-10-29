@@ -286,7 +286,8 @@ if ($canmanage) {
 
 // At-risk students report: available to every viewer (scoped to their own categories inside the
 // page itself), not just managers - coordinators are the people who act on it.
-if ($mlavailable) {
+// Always shown: the page itself explains what's missing when the model isn't ready yet.
+{
     echo html_writer::start_div('mb-3');
     echo html_writer::link(new moodle_url('/local/courseaudit/atriskstudents.php', [
         'categoryid' => $categoryid, 'school' => $school, 'programlevel' => $programlevel, 'search' => $search,
